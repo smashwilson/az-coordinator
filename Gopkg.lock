@@ -2,7 +2,7 @@
 
 
 [[projects]]
-  digest = "1:958b0a5854da7c4119ee311fa6925a8210c59d5d176e82562871ddd6b6f12239"
+  digest = "1:d31f57d8faa35c59c83dd44edabc526f416253bbfb38e290be4a0ca37a557555"
   name = "github.com/aws/aws-sdk-go"
   packages = [
     "aws",
@@ -24,23 +24,18 @@
     "aws/session",
     "aws/signer/v4",
     "internal/ini",
-    "internal/s3err",
     "internal/sdkio",
     "internal/sdkrand",
     "internal/sdkuri",
     "internal/shareddefaults",
     "private/protocol",
-    "private/protocol/eventstream",
-    "private/protocol/eventstream/eventstreamapi",
     "private/protocol/json/jsonutil",
     "private/protocol/jsonrpc",
     "private/protocol/query",
     "private/protocol/query/queryutil",
     "private/protocol/rest",
-    "private/protocol/restxml",
     "private/protocol/xml/xmlutil",
     "service/kms",
-    "service/s3",
     "service/sts",
   ]
   pruneopts = "UT"
@@ -54,13 +49,25 @@
   pruneopts = "UT"
   revision = "c2b33e84"
 
+[[projects]]
+  digest = "1:8ef506fc2bb9ced9b151dafa592d4046063d744c646c1bbe801982ce87e4bc24"
+  name = "github.com/lib/pq"
+  packages = [
+    ".",
+    "oid",
+  ]
+  pruneopts = "UT"
+  revision = "4ded0e9383f75c197b3a2aaa6d590ac52df6fd79"
+  version = "v1.0.0"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/aws/aws-sdk-go/aws",
     "github.com/aws/aws-sdk-go/aws/session",
     "github.com/aws/aws-sdk-go/service/kms",
-    "github.com/aws/aws-sdk-go/service/s3",
+    "github.com/lib/pq",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
