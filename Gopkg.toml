@@ -36,3 +36,7 @@
 [[constraint]]
   name = "github.com/docker/docker"
   revision = "7e7e100be04f09834768c86ee1afd6397a734b35"
+
+[[constraint]]
+  name = "github.com/coreos/go-systemd"
+  version = "18.0.0"
