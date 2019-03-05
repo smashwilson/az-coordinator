@@ -2,11 +2,13 @@ package state
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
+	"path"
 	"regexp"
 
+	"github.com/coreos/go-systemd/dbus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
@@ -14,12 +16,38 @@ import (
 
 var tagRx = regexp.MustCompile(`\A([^:])+:(.+)\z`)
 
-func ActualFromSystem() (*State, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
+type ActualState struct {
+	Images []ActualDockerImage `json:"images"`
+	Units  []ActualSystemdUnit `json:"units"`
+}
+
+type ActualDockerImage struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Tag    string `json:"tag"`
+	Digest string `json:"digest"`
+}
+
+type ActualSystemdUnit struct {
+	Path    string `json:"path"`
+	Content []byte `json:"content"`
+}
+
+func ActualFromSystem(session *Session) (*ActualState, error) {
+	images, err := loadActualDockerImages(session.cli)
 	if err != nil {
 		return nil, err
 	}
 
+	units, err := loadActualSystemdUnits(session.conn)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ActualState{Images: images, Units: units}, nil
+}
+
+func loadActualDockerImages(cli *client.Client) ([]ActualDockerImage, error) {
 	imageSummaries, err := cli.ImageList(context.Background(), types.ImageListOptions{
 		All: true,
 		Filters: filters.NewArgs(
@@ -30,7 +58,7 @@ func ActualFromSystem() (*State, error) {
 		return nil, err
 	}
 
-	images := make([]DockerImage, len(imageSummaries))
+	images := make([]ActualDockerImage, len(imageSummaries))
 	for _, imageSummary := range imageSummaries {
 		if len(imageSummary.RepoTags) < 1 {
 			log.Printf("Image %v has no tags. Skipping.\n", imageSummary.ID)
@@ -50,8 +78,8 @@ func ActualFromSystem() (*State, error) {
 			continue
 		}
 
-		image := DockerImage{
-			ID:     &imageSummary.ID,
+		image := ActualDockerImage{
+			ID:     imageSummary.ID,
 			Name:   matches[1],
 			Tag:    matches[2],
 			Digest: digest,
@@ -59,64 +87,54 @@ func ActualFromSystem() (*State, error) {
 		images = append(images, image)
 	}
 
-	// TODO: Read active units from systemd + filesystem
-
-	return &State{Images: images}, nil
+	return images, nil
 }
 
-func (image DockerImage) PullToSystem() (bool, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
+func loadActualSystemdUnits(conn *dbus.Conn) ([]ActualSystemdUnit, error) {
+	listedUnits, err := conn.ListUnitFilesByPatterns(
+		[]string{"inactive", "deactivating", "failed", "error", "active", "reloading", "activating"},
+		[]string{"az-*"},
+	)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	ref := image.Name + ":" + image.Tag + "@" + image.Digest
-	progress, err := cli.ImagePull(context.Background(), ref, types.ImagePullOptions{})
-	if err != nil {
-		return false, err
-	}
-	defer progress.Close()
+	units := make([]ActualSystemdUnit, len(listedUnits))
+	for _, listedUnit := range listedUnits {
+		content, err := ioutil.ReadFile(listedUnit.Path)
+		if err != nil {
+			log.Printf("Unable to read unit file contents at %v: %v\n", listedUnit.Path, err)
+			content = nil
+		}
 
-	payload, err := ioutil.ReadAll(progress)
-	if err != nil {
-		return false, err
+		units = append(units, ActualSystemdUnit{
+			Path:    listedUnit.Path,
+			Content: content,
+		})
 	}
-	log.Printf("ImagePull payload:\n%s\n---\n", payload)
 
-	// TODO: return "false" if the image was already present
+	return units, nil
+}
+
+func (unit ActualSystemdUnit) Name() string {
+	return path.Base(unit.Path)
+}
+
+func (unit ActualSystemdUnit) DeleteFromSystem(conn *dbus.Conn) (bool, error) {
+	resChan := make(chan string)
+	if _, err := conn.StopUnit(unit.Path, "replace", resChan); err != nil {
+		log.Printf("Unable to stop unit %v: %v\n", unit, err)
+		conn.KillUnit(unit.Path, 9)
+	}
+	<-resChan
+
+	if _, err := conn.DisableUnitFiles([]string{unit.Path}, false); err != nil {
+		log.Printf("Unable to disable %v: %v.\n", unit, err)
+	}
+
+	if err := os.Remove(unit.Path); err != nil {
+		log.Printf("Unable to remove source for %v: %v.\n", unit, err)
+	}
 
 	return true, nil
-}
-
-func (image DockerImage) RemoveFromSystem() (bool, error) {
-	if image.ID == nil {
-		return false, fmt.Errorf("Unable to remove image %v because it has no ID", image)
-	}
-
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		return false, err
-	}
-
-	_, err = cli.ImageRemove(context.Background(), *image.ID, types.ImageRemoveOptions{
-		Force:         true,
-		PruneChildren: true,
-	})
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
-}
-
-func (unit SystemdUnit) CreateOnSystem() (bool, error) {
-	return false, nil
-}
-
-func (unit SystemdUnit) ModifyOnSystem() (bool, error) {
-	return false, nil
-}
-
-func (unit SystemdUnit) DeleteFromSystem() (bool, error) {
-	return false, nil
 }

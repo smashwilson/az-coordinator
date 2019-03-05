@@ -4,18 +4,44 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"path"
+
+	"github.com/coreos/go-systemd/dbus"
 )
 
-func DesiredFromDatabase(db *sql.DB) (*State, error) {
+const (
+	TypeSimple  = iota
+	TypeOneShot = iota
+)
+
+type DesiredState struct {
+	Images []DesiredDockerImage `json:"images"`
+	Units  []DesiredSystemdUnit `json:"units"`
+}
+
+type DesiredDockerImage struct {
+	Name   string `json:"name"`
+	Tag    string `json:"tag"`
+	Digest string `json:"digest"`
+}
+
+type DesiredSystemdUnit struct {
+	Path    string            `json:"path"`
+	Type    int               `json:"type"`
+	Secrets []string          `json:"secrets"`
+	Env     map[string]string `json:"env"`
+}
+
+func DesiredFromDatabase(db *sql.DB) (*DesiredState, error) {
 	imageRows, err := db.Query("SELECT name, tag, digest FROM state_docker_images")
 	if err != nil {
 		return nil, err
 	}
 	defer imageRows.Close()
 
-	images := make([]DockerImage, 10)
+	images := make([]DesiredDockerImage, 10)
 	for imageRows.Next() {
-		image := DockerImage{}
+		image := DesiredDockerImage{}
 		if err = imageRows.Scan(&image.Name, &image.Tag, &image.Digest); err != nil {
 			log.Printf("Unable to load state_docker_images row: %v.\n", err)
 			continue
@@ -29,14 +55,14 @@ func DesiredFromDatabase(db *sql.DB) (*State, error) {
 	}
 	defer unitRows.Close()
 
-	units := make([]SystemdUnit, 10)
+	units := make([]DesiredSystemdUnit, 10)
 	for unitRows.Next() {
 		var (
 			rawSecrets []byte
 			rawEnv     []byte
 		)
 
-		unit := SystemdUnit{}
+		unit := DesiredSystemdUnit{}
 		if err = unitRows.Scan(&unit.Path, &unit.Type, &rawSecrets, &rawEnv); err != nil {
 			log.Printf("Unable to load state_systemd_units row: %v.\n", err)
 			continue
@@ -57,10 +83,10 @@ func DesiredFromDatabase(db *sql.DB) (*State, error) {
 		units = append(units, unit)
 	}
 
-	return &State{Images: images, Units: units}, nil
+	return &DesiredState{Images: images, Units: units}, nil
 }
 
-func (image DockerImage) MakeDesired(db *sql.DB) error {
+func (image DesiredDockerImage) MakeDesired(db *sql.DB) error {
 	err := db.QueryRow(`
     INSERT INTO state_docker_images (name, tag, digest)
     VALUES($1, $2, $3)
@@ -72,7 +98,11 @@ func (image DockerImage) MakeDesired(db *sql.DB) error {
 	return nil
 }
 
-func (unit SystemdUnit) MakeDesired(db *sql.DB) error {
+func (image DesiredDockerImage) Matches(actual ActualDockerImage) bool {
+	return image.Name == actual.Name && image.Tag == actual.Tag && image.Digest == actual.Digest
+}
+
+func (unit DesiredSystemdUnit) MakeDesired(db *sql.DB) error {
 	rawSecrets, err := json.Marshal(unit.Secrets)
 	if err != nil {
 		return err
@@ -92,4 +122,20 @@ func (unit SystemdUnit) MakeDesired(db *sql.DB) error {
 		return err
 	}
 	return nil
+}
+
+func (unit DesiredSystemdUnit) Name() string {
+	return path.Base(unit.Path)
+}
+
+func (unit DesiredSystemdUnit) Matches(actual ActualSystemdUnit) bool {
+	return false
+}
+
+func (unit DesiredSystemdUnit) CreateOnSystem(conn *dbus.Conn) (bool, error) {
+	return false, nil
+}
+
+func (unit DesiredSystemdUnit) ModifyOnSystem(conn *dbus.Conn) (bool, error) {
+	return false, nil
 }
