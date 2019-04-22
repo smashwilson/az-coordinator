@@ -29,28 +29,28 @@ func Prepare(n needs) results {
 	if n.options || n.db || n.session {
 		r.options, err = loadOptions()
 		if err != nil {
-			log.Fatalf("Unable to load options: %v.\n", err)
+			log.WithError(err).Fatal("Unable to load options.")
 		}
 	}
 
 	if n.db || n.session {
-		log.Println("Connecting to database")
+		log.Info("Connecting to database.")
 		r.db, err = sql.Open("postgres", r.options.DatabaseURL)
 		if err != nil {
-			log.Fatalf("Unable to connect to database: %v.\n", err)
+			log.WithError(err).Fatal("Unable to connect to database.")
 		}
 	}
 
 	if n.session {
-		log.Println("Creating decoder ring")
+		log.Info("Creating decoder ring.")
 		ring, rErr := secrets.NewDecoderRing(r.options.MasterKeyId)
 		if rErr != nil {
-			log.Fatalf("Unable to create decoder ring: %v.\n", rErr)
+			log.WithError(rErr).Fatal("Unable to create decoder ring.")
 		}
 
 		r.session, err = state.NewSession(r.db, ring)
 		if err != nil {
-			log.Fatalf("Unable to create session: %v.\n", err)
+			log.WithError(err).Fatal("Unable to create session.")
 		}
 	}
 
