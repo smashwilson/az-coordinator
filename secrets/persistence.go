@@ -4,11 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"regexp"
 
 	"github.com/lib/pq"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -35,24 +35,25 @@ func LoadFromDatabase(db *sql.DB, ring *DecoderRing) (*SecretsBag, error) {
 
 	for rows.Next() {
 		var ciphertext []byte
-		if err := rows.Scan(ciphertext); err != nil {
-			log.Printf("Unable to read secrets result row: %v.\n", err)
-			continue
+		if err := rows.Scan(&ciphertext); err != nil {
+			return nil, err
 		}
 
 		plaintext, err := ring.Decrypt(ciphertext)
 		if err != nil {
-			return nil, err
+			log.WithError(err).Warn("Unable to decrypt ciphertext. Skipping row.")
+			continue
 		}
 
 		matches := keyRx.FindStringSubmatch(*plaintext)
 		if matches == nil {
-			log.Println("Unable to parse secret value")
+			log.Warn("Unable to parse secret value.")
 			continue
 		}
 
 		bag.secrets[matches[1]] = matches[2]
 	}
+	log.WithField("count", len(bag.secrets)).Debug("Secrets loaded.")
 
 	return &bag, nil
 }
@@ -69,11 +70,11 @@ func (bag SecretsBag) Get(key string, def string) string {
 	}
 }
 
-func (bag SecretsBag) GetRequired(key string) (*string, error) {
+func (bag SecretsBag) GetRequired(key string) (string, error) {
 	if value, ok := bag.secrets[key]; ok {
-		return &value, nil
+		return value, nil
 	} else {
-		return nil, fmt.Errorf("Missing required secret [%v]", key)
+		return "", fmt.Errorf("Missing required secret [%v]", key)
 	}
 }
 
@@ -107,7 +108,7 @@ func (bag SecretsBag) SaveToDatabase(db *sql.DB, ring *DecoderRing) error {
 		plaintext := key + "=" + value
 		ciphertext, err := ring.Encrypt(plaintext)
 		if err != nil {
-			log.Printf("Unable to encrypt secret %v: %v. Skipping.\n", key, err)
+			log.WithError(err).WithField("key", key).Warn("Unable to encrypt secret.")
 			continue
 		}
 		ciphertexts = append(ciphertexts, ciphertext)
@@ -122,7 +123,7 @@ func (bag SecretsBag) SaveToDatabase(db *sql.DB, ring *DecoderRing) error {
 	defer func() {
 		if needsAbort {
 			if err = tx.Rollback(); err != nil {
-				log.Printf("Unable to rollback transaction: %v\n", err)
+				log.WithError(err).Warn("Unable to rollback transaction")
 			}
 			needsAbort = false
 		}
@@ -154,7 +155,7 @@ func (bag SecretsBag) SaveToDatabase(db *sql.DB, ring *DecoderRing) error {
 func (bag SecretsBag) writeToFile(key string, filename string) (bool, error) {
 	value, ok := bag.secrets[key]
 	if !ok {
-		return false, fmt.Errorf("Required secret %v is not found!\n", key)
+		return false, fmt.Errorf("Required secret %v is not found", key)
 	}
 
 	var writeNeeded = false
