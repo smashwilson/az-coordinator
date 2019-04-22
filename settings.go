@@ -2,8 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"log"
 	"os"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type options struct {
@@ -23,7 +24,7 @@ func getEnvironmentSetting(varName string, defaultValue string) string {
 
 func loadOptions() (*options, error) {
 	optionsFilePath := getEnvironmentSetting("AZ_OPTIONS", "/etc/az-coordinator/options.json")
-	log.Printf("Loading configuration options from [%v].\n", optionsFilePath)
+	log.WithField("path", optionsFilePath).Info("Loading configuration options from file.")
 
 	file, err := os.Open(optionsFilePath)
 	if err != nil {
