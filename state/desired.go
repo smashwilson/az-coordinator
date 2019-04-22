@@ -1,55 +1,44 @@
 package state
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
-	"log"
 	"path"
 
-	"github.com/coreos/go-systemd/dbus"
-)
-
-const (
-	TypeSimple  = iota
-	TypeOneShot = iota
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/filters"
+	log "github.com/sirupsen/logrus"
 )
 
 type DesiredState struct {
-	Images []DesiredDockerImage `json:"images"`
-	Units  []DesiredSystemdUnit `json:"units"`
+	Units []DesiredSystemdUnit `json:"units"`
 }
 
-type DesiredDockerImage struct {
-	Name   string `json:"name"`
-	Tag    string `json:"tag"`
-	Digest string `json:"digest"`
+type DesiredDockerContainer struct {
+	Name      string `json:"name"`
+	ImageID   string `json:"image_id"`
+	ImageName string `json:"image_name"`
+	ImageTag  string `json:"image_tag"`
 }
 
 type DesiredSystemdUnit struct {
-	Path    string            `json:"path"`
-	Type    int               `json:"type"`
-	Secrets []string          `json:"secrets"`
-	Env     map[string]string `json:"env"`
+	Path      string                 `json:"path"`
+	Type      int                    `json:"type"`
+	Container DesiredDockerContainer `json:"container"`
+	Secrets   []string               `json:"secrets"`
+	Env       map[string]string      `json:"env"`
+	Ports     map[int]int            `json:"ports"`
+	Schedule  string                 `json:"calendar,omitempty"`
 }
 
-func DesiredFromDatabase(db *sql.DB) (*DesiredState, error) {
-	imageRows, err := db.Query("SELECT name, tag, digest FROM state_docker_images")
-	if err != nil {
-		return nil, err
-	}
-	defer imageRows.Close()
+func (session Session) ReadDesiredState() (*DesiredState, error) {
+	var db = session.db
 
-	images := make([]DesiredDockerImage, 10)
-	for imageRows.Next() {
-		image := DesiredDockerImage{}
-		if err = imageRows.Scan(&image.Name, &image.Tag, &image.Digest); err != nil {
-			log.Printf("Unable to load state_docker_images row: %v.\n", err)
-			continue
-		}
-		images = append(images, image)
-	}
-
-	unitRows, err := db.Query("SELECT path, type, secrets, env FROM state_systemd_units")
+	unitRows, err := db.Query(`
+    SELECT path, type, container_name, container_image_name, container_image_tag, secrets, env, ports, schedule
+		FROM state_systemd_units
+  `)
 	if err != nil {
 		return nil, err
 	}
@@ -60,49 +49,65 @@ func DesiredFromDatabase(db *sql.DB) (*DesiredState, error) {
 		var (
 			rawSecrets []byte
 			rawEnv     []byte
+			rawPorts   []byte
 		)
 
 		unit := DesiredSystemdUnit{}
-		if err = unitRows.Scan(&unit.Path, &unit.Type, &rawSecrets, &rawEnv); err != nil {
-			log.Printf("Unable to load state_systemd_units row: %v.\n", err)
+		if err = unitRows.Scan(
+			&unit.Path, &unit.Type, &unit.Container.Name, &unit.Container.ImageName, &unit.Container.ImageTag,
+			&rawSecrets, &rawEnv, &rawPorts, &unit.Schedule,
+		); err != nil {
+			log.WithError(err).Warn("Unable to load state_systemd_units row.")
 			continue
 		}
 
 		if err = json.Unmarshal(rawSecrets, &unit.Secrets); err != nil {
-			log.Printf("Malformed secrets column in state_systemd_units row [path=%v]: %v\n.", unit.Path, err)
-			log.Printf("Contents:\n%s\n---\n", rawSecrets)
-			unit.Secrets = make([]string, 0)
+			log.WithError(err).WithField("unit", unit.UnitName()).Warn("Malformed secrets column in state_systemd_units row")
+			continue
 		}
 
 		if err = json.Unmarshal(rawEnv, &unit.Env); err != nil {
-			log.Printf("Malformed env column in state_systemd_units row [path=%v]: %v\n", unit.Path, err)
-			log.Printf("Contents:\n%s\n---\n", rawEnv)
-			unit.Env = make(map[string]string, 0)
+			log.WithError(err).WithField("unit", unit.UnitName()).Warn("Malformed env column in state_systemd_units row")
+			log.Warnf("Contents:\n%s\n---\n", rawEnv)
+			continue
+		}
+
+		if err = json.Unmarshal(rawPorts, &unit.Ports); err != nil {
+			log.WithError(err).WithField("unit", unit.UnitName()).Warn("Malformed ports column in state_systemd_units row")
+			log.Warnf("Contents:\n%s\n---\n", rawPorts)
+			continue
 		}
 
 		units = append(units, unit)
 	}
 
-	return &DesiredState{Images: images, Units: units}, nil
+	return &DesiredState{Units: units}, nil
 }
 
-func (image DesiredDockerImage) MakeDesired(db *sql.DB) error {
-	err := db.QueryRow(`
-    INSERT INTO state_docker_images (name, tag, digest)
-    VALUES($1, $2, $3)
-    ON CONFLICT DO UPDATE SET digest = EXCLUDED.digest
-  `, image.Name, image.Tag, image.Digest).Scan()
-	if err != sql.ErrNoRows {
-		return err
+func (state *DesiredState) ReadImages(session *Session) error {
+	for _, unit := range state.Units {
+		imageSummaries, err := session.cli.ImageList(context.Background(), types.ImageListOptions{
+			Filters: filters.NewArgs(filters.Arg("reference", unit.Container.ImageName+":"+unit.Container.ImageTag)),
+		})
+		if err != nil {
+			return err
+		}
+
+		var highest int64
+		for _, imageSummary := range imageSummaries {
+			if imageSummary.Created > highest {
+				unit.Container.ImageID = imageSummary.ID
+				highest = imageSummary.Created
+			}
+		}
 	}
+
 	return nil
 }
 
-func (image DesiredDockerImage) Matches(actual ActualDockerImage) bool {
-	return image.Name == actual.Name && image.Tag == actual.Tag && image.Digest == actual.Digest
-}
+func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
+	var db = session.db
 
-func (unit DesiredSystemdUnit) MakeDesired(db *sql.DB) error {
 	rawSecrets, err := json.Marshal(unit.Secrets)
 	if err != nil {
 		return err
@@ -113,29 +118,28 @@ func (unit DesiredSystemdUnit) MakeDesired(db *sql.DB) error {
 		return err
 	}
 
+	rawPorts, err := json.Marshal(unit.Ports)
+	if err != nil {
+		return err
+	}
+
 	err = db.QueryRow(`
-    INSERT INTO state_systemd_units (path, type, secrets, env)
-    VALUES($1, $2, $3, $4)
-    ON CONFLICT DO UPDATE SET type = EXCLUDED.type, secrets = EXCLUDED.secrets, env = EXCLUDED.env
-  `, unit.Path, unit.Type, rawSecrets, rawEnv).Scan()
+    INSERT INTO state_systemd_units
+      (path, type, container_name, container_image_name, container_image_tag, secrets, env, ports, schedule)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    ON CONFLICT DO UPDATE SET
+      type = EXCLUDED.type, container_image = EXCLUDED.container_image, container_tag = EXCLUDED.container_tag,
+      secrets = EXCLUDED.secrets, env = EXCLUDED.env, ports = EXCLUDED.ports, schedule = EXCLUDED.schedule
+  `,
+		unit.Path, unit.Type, unit.Container.Name, unit.Container.ImageName, unit.Container.ImageTag,
+		rawSecrets, rawEnv, rawPorts, unit.Schedule,
+	).Scan()
 	if err != sql.ErrNoRows {
 		return err
 	}
 	return nil
 }
 
-func (unit DesiredSystemdUnit) Name() string {
+func (unit DesiredSystemdUnit) UnitName() string {
 	return path.Base(unit.Path)
-}
-
-func (unit DesiredSystemdUnit) Matches(actual ActualSystemdUnit) bool {
-	return false
-}
-
-func (unit DesiredSystemdUnit) CreateOnSystem(conn *dbus.Conn) (bool, error) {
-	return false, nil
-}
-
-func (unit DesiredSystemdUnit) ModifyOnSystem(conn *dbus.Conn) (bool, error) {
-	return false, nil
 }

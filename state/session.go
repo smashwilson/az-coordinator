@@ -2,21 +2,24 @@ package state
 
 import (
 	"context"
+	"database/sql"
 	"io/ioutil"
-	"log"
 
 	"github.com/coreos/go-systemd/dbus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+	log "github.com/sirupsen/logrus"
+	"github.com/smashwilson/az-coordinator/secrets"
 )
 
 type Session struct {
-	cli         *client.Client
-	conn        *dbus.Conn
-	needsReload bool
+	db      *sql.DB
+	cli     *client.Client
+	conn    *dbus.Conn
+	secrets *secrets.SecretsBag
 }
 
-func NewSession() (*Session, error) {
+func NewSession(db *sql.DB, ring *secrets.DecoderRing) (*Session, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return nil, err
@@ -27,48 +30,59 @@ func NewSession() (*Session, error) {
 		return nil, err
 	}
 
-	return &Session{cli: cli, conn: conn, needsReload: false}, nil
+	secrets, err := secrets.LoadFromDatabase(db, ring)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Session{
+		db:      db,
+		cli:     cli,
+		conn:    conn,
+		secrets: secrets,
+	}, nil
 }
 
-func (s Session) PullImage(image DesiredDockerImage) error {
-	ref := image.Name + ":" + image.Tag + "@" + image.Digest
+func (s Session) UpdateTLSFiles() (bool, error) {
+	return s.secrets.WriteTLSFiles()
+}
+
+func (s Session) PullAllImages(state DesiredState) []error {
+	errs := make([]error, 0)
+
+	imageRefs := make(map[string]bool, len(state.Units))
+	for _, unit := range state.Units {
+		ref := unit.Container.ImageName + ":" + unit.Container.ImageTag
+		imageRefs[ref] = true
+	}
+
+	results := make(chan error, len(imageRefs))
+	for ref, _ := range imageRefs {
+		go s.pullImage(ref, results)
+	}
+	for i := 0; i < len(imageRefs); i++ {
+		errs = append(errs, <-results)
+	}
+
+	return errs
+}
+
+func (s Session) pullImage(ref string, done chan<- error) {
 	progress, err := s.cli.ImagePull(context.Background(), ref, types.ImagePullOptions{})
 	if err != nil {
-		return err
+		done <- err
+		return
 	}
 	defer progress.Close()
 
 	payload, err := ioutil.ReadAll(progress)
 	if err != nil {
-		return err
+		done <- err
+		return
 	}
-	log.Printf("ImagePull payload:\n%s\n---\n", payload)
+	log.Debugf("ImagePull payload:\n%s\n---\n", payload)
 
-	return nil
-}
-
-func (s Session) RemoveImage(image ActualDockerImage) error {
-	_, err := s.cli.ImageRemove(context.Background(), image.ID, types.ImageRemoveOptions{
-		Force:         true,
-		PruneChildren: true,
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Session) CreateUnit(unit DesiredSystemdUnit) error {
-	return nil
-}
-
-func (s *Session) ModifyUnit(unit DesiredSystemdUnit) error {
-	return nil
-}
-
-func (s *Session) DeleteUnit(unit ActualSystemdUnit) error {
-	return nil
+	done <- nil
 }
 
 func (s Session) Close() error {
