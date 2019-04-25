@@ -29,7 +29,10 @@ ExecStart=/usr/bin/docker run \
   --read-only \
   --network local \
 {{ range $key, $value := .Env }}
-    --env {{ $key }}="{{ $value }}" \
+  --env {{ $key }}="{{ $value }}" \
+{{ end }}
+{{ range $hostPath, $containerPath := .U.Volumes }}
+  --volume {{ $hostPath }}:{{ $containerPath }}:ro \
 {{ end }}
 {{ range $localPort, $externalPort := .U.Ports }}
   --publish {{ $localPort }}:{{ $externalPort }} \
@@ -53,6 +56,12 @@ ExecStart=/usr/bin/docker run --rm \
   --read-only \
 {{ range $key, $value := .Env }}
   --env {{ $key }}="{{ $value }}" \
+{{ end }}
+{{ range $hostPath, $containerPath := .U.Volumes }}
+  --volume {{ $hostPath }}:{{ $containerPath }}:ro \
+{{ end }}
+{{ range $localPort, $externalPort := .U.Ports }}
+  --publish {{ $localPort }}:{{ $externalPort }} \
 {{ end }}
   {{ .U.Container.ImageName }}:{{ .U.Container.ImageTag }}
 `
