@@ -15,8 +15,10 @@ type Delta struct {
 	UnitsToChange  []DesiredSystemdUnit `json:"units_to_change"`
 	UnitsToRestart []DesiredSystemdUnit `json:"units_to_restart"`
 	UnitsToRemove  []ActualSystemdUnit  `json:"units_to_remove"`
+	FilesToWrite   []string             `json:"files_to_write"`
 
-	session *Session
+	fileContent map[string][]byte
+	session     *Session
 }
 
 func (session *Session) Between(desired *DesiredState, actual *ActualState) Delta {
@@ -25,10 +27,20 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 		unitsToChange  = make([]DesiredSystemdUnit, 0)
 		unitsToRestart = make([]DesiredSystemdUnit, 0)
 		unitsToRemove  = make([]ActualSystemdUnit, 0)
+		filesToWrite   = make([]string, len(desired.Files))
 
-		desiredByName    = make(map[string]DesiredSystemdUnit)
-		desiredRemaining = make(map[string]bool)
+		fileContentByPath = make(map[string][]byte, len(desired.Files))
+		desiredByName     = make(map[string]DesiredSystemdUnit)
+		desiredRemaining  = make(map[string]bool)
 	)
+
+	for filePath, desiredContent := range desired.Files {
+		actualContent, ok := actual.Files[filePath]
+		if !ok || !bytes.Equal(desiredContent, actualContent) {
+			filesToWrite = append(filesToWrite, filePath)
+			fileContentByPath[filePath] = desiredContent
+		}
+	}
 
 	for _, unit := range desired.Units {
 		desiredByName[unit.UnitName()] = unit
@@ -98,6 +110,8 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 		UnitsToChange:  unitsToChange,
 		UnitsToRestart: unitsToRestart,
 		UnitsToRemove:  unitsToRemove,
+		FilesToWrite:   filesToWrite,
+		fileContent:    fileContentByPath,
 		session:        session,
 	}
 }
