@@ -89,6 +89,16 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 			if container.Image != desired.Container.ImageID {
 				// A newer image has been pulled. Restart the unit to pick it up.
 				unitsToRestart = append(unitsToRestart, desired)
+				continue
+			}
+
+			// Schedule the unit for restart if a volume-mounted file is due to be modified.
+			for hostPath, _ := range desired.Volumes {
+				if _, ok := fileContentByPath[hostPath]; ok {
+					// A mounted file has been written. Restart the unit to pick it up.
+					unitsToRestart = append(unitsToRestart, desired)
+					break
+				}
 			}
 
 			// Otherwise: everything is fine, nothing to do.
