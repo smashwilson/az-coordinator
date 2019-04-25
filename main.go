@@ -138,7 +138,8 @@ func serve() {
 	})
 
 	log.Info("Performing initial sync.")
-	performSync(r.session)
+	delta := performSync(r.session)
+	log.WithField("delta", delta).Debug("Delta applied.")
 
 	s := newServer(r.options, r.db)
 	if err := s.listen(); err != nil {
