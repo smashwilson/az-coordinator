@@ -147,15 +147,6 @@ func serve() {
 }
 
 func performSync(session *state.Session) state.Delta {
-	log.Info("Writing TLS certificates.")
-	ok, err := session.UpdateTLSFiles()
-	if err != nil {
-		log.WithError(err).Fatal("Unable to write TLS certificates.")
-	}
-	if ok {
-		log.Info("New certificates written.")
-	}
-
 	log.Info("Reading desired state.")
 	desired, err := session.ReadDesiredState()
 	if err != nil {

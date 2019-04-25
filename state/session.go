@@ -43,10 +43,6 @@ func NewSession(db *sql.DB, ring *secrets.DecoderRing) (*Session, error) {
 	}, nil
 }
 
-func (s Session) UpdateTLSFiles() (bool, error) {
-	return s.secrets.WriteTLSFiles()
-}
-
 func (s Session) PullAllImages(state DesiredState) []error {
 	errs := make([]error, 0)
 
