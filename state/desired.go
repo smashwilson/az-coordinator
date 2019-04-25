@@ -29,6 +29,7 @@ type DesiredSystemdUnit struct {
 	Secrets   []string               `json:"secrets"`
 	Env       map[string]string      `json:"env"`
 	Ports     map[int]int            `json:"ports"`
+	Volumes   map[string]string      `json:"volumes"`
 	Schedule  string                 `json:"calendar,omitempty"`
 }
 
@@ -36,7 +37,11 @@ func (session Session) ReadDesiredState() (*DesiredState, error) {
 	var db = session.db
 
 	unitRows, err := db.Query(`
-    SELECT path, type, container_name, container_image_name, container_image_tag, secrets, env, ports, schedule
+    SELECT
+      path, type,
+      container_name, container_image_name, container_image_tag,
+      secrets, env, ports, volumes,
+      schedule
 		FROM state_systemd_units
   `)
 	if err != nil {
@@ -50,12 +55,15 @@ func (session Session) ReadDesiredState() (*DesiredState, error) {
 			rawSecrets []byte
 			rawEnv     []byte
 			rawPorts   []byte
+			rawVolumes []byte
 		)
 
 		unit := DesiredSystemdUnit{}
 		if err = unitRows.Scan(
-			&unit.Path, &unit.Type, &unit.Container.Name, &unit.Container.ImageName, &unit.Container.ImageTag,
-			&rawSecrets, &rawEnv, &rawPorts, &unit.Schedule,
+			&unit.Path, &unit.Type,
+			&unit.Container.Name, &unit.Container.ImageName, &unit.Container.ImageTag,
+			&rawSecrets, &rawEnv, &rawPorts, &rawVolumes,
+			&unit.Schedule,
 		); err != nil {
 			log.WithError(err).Warn("Unable to load state_systemd_units row.")
 			continue
@@ -75,6 +83,12 @@ func (session Session) ReadDesiredState() (*DesiredState, error) {
 		if err = json.Unmarshal(rawPorts, &unit.Ports); err != nil {
 			log.WithError(err).WithField("unit", unit.UnitName()).Warn("Malformed ports column in state_systemd_units row")
 			log.Warnf("Contents:\n%s\n---\n", rawPorts)
+			continue
+		}
+
+		if err = json.Unmarshal(rawVolumes, &unit.Volumes); err != nil {
+			log.WithError(err).WithField("unit", unit.UnitName()).Warn("Malformed volumes column in state_systemd_units row")
+			log.Warnf("Contents:\n%s\n---\n", rawVolumes)
 			continue
 		}
 
@@ -123,16 +137,28 @@ func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
 		return err
 	}
 
+	rawVolumes, err := json.Marshal(unit.Volumes)
+	if err != nil {
+		return err
+	}
+
 	err = db.QueryRow(`
     INSERT INTO state_systemd_units
-      (path, type, container_name, container_image_name, container_image_tag, secrets, env, ports, schedule)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      (path, type,
+        container_name, container_image_name, container_image_tag,
+        secrets, env, ports, volumes,
+        schedule)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     ON CONFLICT DO UPDATE SET
-      type = EXCLUDED.type, container_image = EXCLUDED.container_image, container_tag = EXCLUDED.container_tag,
-      secrets = EXCLUDED.secrets, env = EXCLUDED.env, ports = EXCLUDED.ports, schedule = EXCLUDED.schedule
+      type = EXCLUDED.type,
+      container_image = EXCLUDED.container_image, container_tag = EXCLUDED.container_tag,
+      secrets = EXCLUDED.secrets, env = EXCLUDED.env, ports = EXCLUDED.ports, volumes = EXCLUDED.volumes,
+      schedule = EXCLUDED.schedule
   `,
-		unit.Path, unit.Type, unit.Container.Name, unit.Container.ImageName, unit.Container.ImageTag,
-		rawSecrets, rawEnv, rawPorts, unit.Schedule,
+		unit.Path, unit.Type,
+		unit.Container.Name, unit.Container.ImageName, unit.Container.ImageTag,
+		rawSecrets, rawEnv, rawPorts, rawVolumes,
+		unit.Schedule,
 	).Scan()
 	if err != sql.ErrNoRows {
 		return err
