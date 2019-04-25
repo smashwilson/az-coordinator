@@ -17,6 +17,12 @@ const (
 	FilenameDHParams       = "/etc/ssl/dhparams.pem"
 )
 
+var TLSKeysToPath = map[string]string{
+	"TLS_CERTIFICATE": FilenameTLSCertificate,
+	"TLS_KEY":         FilenameTLSKey,
+	"TLS_DH_PARAMS":   FilenameDHParams,
+}
+
 type SecretsBag struct {
 	secrets map[string]string
 }
@@ -78,28 +84,31 @@ func (bag SecretsBag) GetRequired(key string) (string, error) {
 	}
 }
 
-func (bag SecretsBag) WriteTLSFiles() (bool, error) {
-	var changed = false
-
-	ch, err := bag.writeToFile("TLS_CERTIFICATE", FilenameTLSCertificate)
-	changed = changed || ch
-	if err != nil {
-		return changed, err
+func (bag SecretsBag) DesiredTLSFiles() (map[string][]byte, error) {
+	desiredContents := make(map[string][]byte, len(TLSKeysToPath))
+	for key, path := range TLSKeysToPath {
+		desired, err := bag.GetRequired(key)
+		if err != nil {
+			return nil, err
+		}
+		desiredContents[path] = []byte(desired)
 	}
+	return desiredContents, nil
+}
 
-	ch, err = bag.writeToFile("TLS_KEY", FilenameTLSKey)
-	changed = changed || ch
-	if err != nil {
-		return changed, err
+func (bag SecretsBag) ActualTLSFiles() (map[string][]byte, error) {
+	actualContents := make(map[string][]byte, len(TLSKeysToPath))
+	for _, path := range TLSKeysToPath {
+		actual, err := ioutil.ReadFile(path)
+		if err == nil {
+			actualContents[path] = actual
+		} else if err == os.ErrNotExist {
+			actualContents[path] = nil
+		} else {
+			return nil, err
+		}
 	}
-
-	ch, err = bag.writeToFile("TLS_DH_PARAMS", FilenameDHParams)
-	changed = changed || ch
-	if err != nil {
-		return changed, err
-	}
-
-	return changed, nil
+	return actualContents, nil
 }
 
 func (bag SecretsBag) SaveToDatabase(db *sql.DB, ring *DecoderRing) error {
@@ -150,30 +159,4 @@ func (bag SecretsBag) SaveToDatabase(db *sql.DB, ring *DecoderRing) error {
 	needsAbort = false
 
 	return nil
-}
-
-func (bag SecretsBag) writeToFile(key string, filename string) (bool, error) {
-	value, ok := bag.secrets[key]
-	if !ok {
-		return false, fmt.Errorf("Required secret %v is not found", key)
-	}
-
-	var writeNeeded = false
-
-	existing, err := ioutil.ReadFile(filename)
-	if err == nil {
-		writeNeeded = string(existing) != value
-	} else if err == os.ErrNotExist {
-		writeNeeded = true
-	} else {
-		return false, err
-	}
-
-	if writeNeeded {
-		if err := ioutil.WriteFile(filename, []byte(value), 0600); err != nil {
-			return false, err
-		}
-	}
-
-	return writeNeeded, nil
 }
