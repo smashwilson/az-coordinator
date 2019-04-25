@@ -74,7 +74,12 @@ func help() {
 }
 
 func writeHelp(out io.Writer, exitCode int) {
-	fmt.Fprintf(out, "Usage: %s [command]\n", os.Args[0])
+	fmt.Fprintf(out, "Usage: %s [flags] [command]\n", os.Args[0])
+	fmt.Fprintf(out, "\n")
+	fmt.Fprintf(out, "Flags:\n")
+	fmt.Fprintf(out, "\n")
+	fmt.Fprintf(out, "  --verbose,-v  Log everything that can be logged.\n")
+	fmt.Fprintf(out, "  --quiet,-q    Log only errors and warnings.\n")
 	fmt.Fprintf(out, "\n")
 	fmt.Fprintf(out, "Commands:\n")
 	fmt.Fprintf(out, "\n")
