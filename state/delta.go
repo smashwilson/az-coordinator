@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 
 	"github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
@@ -123,6 +125,20 @@ func (d Delta) Apply() []error {
 		needsReload  = false
 		restartUnits = make([]string, len(d.UnitsToChange)+len(d.UnitsToRestart))
 	)
+
+	for filePath, fileContent := range d.fileContent {
+		dir := filepath.Dir(filePath)
+
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		if err := ioutil.WriteFile(filePath, fileContent, 0600); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+	}
 
 	for _, unit := range d.UnitsToAdd {
 		f, err := os.OpenFile(unit.Path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
