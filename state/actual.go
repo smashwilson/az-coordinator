@@ -9,6 +9,7 @@ import (
 
 type ActualState struct {
 	Units []ActualSystemdUnit `json:"units"`
+	Files map[string][]byte   `json:"-"`
 }
 
 type ActualSystemdUnit struct {
@@ -18,7 +19,12 @@ type ActualSystemdUnit struct {
 }
 
 func (session Session) ReadActualState() (*ActualState, error) {
-	listedUnits, err := session.conn.ListUnitFilesByPatterns(
+	var (
+		conn    = session.conn
+		secrets = session.secrets
+	)
+
+	listedUnits, err := conn.ListUnitFilesByPatterns(
 		[]string{"inactive", "deactivating", "failed", "error", "active", "reloading", "activating"},
 		[]string{"az-*"},
 	)
@@ -28,9 +34,9 @@ func (session Session) ReadActualState() (*ActualState, error) {
 
 	units := make([]ActualSystemdUnit, len(listedUnits))
 	for _, listedUnit := range listedUnits {
-		content, err := ioutil.ReadFile(listedUnit.Path)
-		if err != nil {
-			log.WithError(err).WithField("path", listedUnit.Path).Warn("Unable to read unit file contents.")
+		content, readErr := ioutil.ReadFile(listedUnit.Path)
+		if readErr != nil {
+			log.WithError(readErr).WithField("path", listedUnit.Path).Warn("Unable to read unit file contents.")
 			content = nil
 		}
 
@@ -40,7 +46,12 @@ func (session Session) ReadActualState() (*ActualState, error) {
 		})
 	}
 
-	return &ActualState{Units: units}, nil
+	files, err := secrets.ActualTLSFiles()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ActualState{Units: units, Files: files}, nil
 }
 
 func (unit ActualSystemdUnit) UnitName() string {

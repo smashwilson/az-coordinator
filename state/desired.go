@@ -13,6 +13,7 @@ import (
 
 type DesiredState struct {
 	Units []DesiredSystemdUnit `json:"units"`
+	Files map[string][]byte    `json:"-"`
 }
 
 type DesiredDockerContainer struct {
@@ -34,7 +35,10 @@ type DesiredSystemdUnit struct {
 }
 
 func (session Session) ReadDesiredState() (*DesiredState, error) {
-	var db = session.db
+	var (
+		db      = session.db
+		secrets = session.secrets
+	)
 
 	unitRows, err := db.Query(`
     SELECT
@@ -95,7 +99,12 @@ func (session Session) ReadDesiredState() (*DesiredState, error) {
 		units = append(units, unit)
 	}
 
-	return &DesiredState{Units: units}, nil
+	files, err := secrets.DesiredTLSFiles()
+	if err != nil {
+		return nil, err
+	}
+
+	return &DesiredState{Units: units, Files: files}, nil
 }
 
 func (state *DesiredState) ReadImages(session *Session) error {
