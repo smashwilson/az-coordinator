@@ -9,6 +9,7 @@ import (
 
 	_ "github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
+	"github.com/smashwilson/az-coordinator/secrets"
 	"github.com/smashwilson/az-coordinator/state"
 )
 
@@ -62,11 +63,12 @@ func main() {
 }
 
 var commands = map[string]func(){
-	"help":  help,
-	"init":  initialize,
-	"diff":  diff,
-	"sync":  sync,
-	"serve": serve,
+	"help":        help,
+	"init":        initialize,
+	"set-secrets": setSecrets,
+	"diff":        diff,
+	"sync":        sync,
+	"serve":       serve,
 }
 
 func help() {
@@ -83,16 +85,59 @@ func writeHelp(out io.Writer, exitCode int) {
 	fmt.Fprintf(out, "\n")
 	fmt.Fprintf(out, "Commands:\n")
 	fmt.Fprintf(out, "\n")
-	fmt.Fprintf(out, "  help  Show this message.\n")
-	fmt.Fprintf(out, "  init  Initialize the database tables that are expected to be present.\n")
-	fmt.Fprintf(out, "  diff  Calculate the actions needed to be taken to bring the system to its desired state.\n")
-	fmt.Fprintf(out, "  sync  Bring the system to its desired state. Report the actions taken.\n")
-	fmt.Fprintf(out, "  serve Begin the server that hosts the management API.\n")
+	fmt.Fprintf(out, "  help         Show this message.\n")
+	fmt.Fprintf(out, "  init         Initialize the database tables that are expected to be present.\n")
+	fmt.Fprintf(out, "  set-secrets  Add or override existing secrets from a JSON file.\n")
+	fmt.Fprintf(out, "  diff         Calculate the actions needed to be taken to bring the system to its desired state.\n")
+	fmt.Fprintf(out, "  sync         Bring the system to its desired state. Report the actions taken.\n")
+	fmt.Fprintf(out, "  serve        Begin the server that hosts the management API.\n")
 	os.Exit(exitCode)
 }
 
 func initialize() {
 	//
+}
+
+func setSecrets() {
+	if flag.NArg() < 2 {
+		fmt.Fprintf(os.Stderr, "set-secrets requires at least one argument: the path to a JSON file.\n")
+		writeHelp(os.Stderr, 1)
+	}
+
+	var r = Prepare(needs{options: true, db: true})
+
+	var toLoad map[string]string
+	inf, err := os.Open(flag.Arg(1))
+	if err != nil {
+		log.WithError(err).WithField("path", flag.Arg(1)).Fatal("Unable to load secrets file.")
+	}
+	decoder := json.NewDecoder(inf)
+	if err = decoder.Decode(&toLoad); err != nil {
+		log.WithError(err).WithField("path", flag.Arg(1)).Fatal("Unable to parse secrets file.")
+	}
+
+	log.Info("Creating decoder ring.")
+	ring, err := secrets.NewDecoderRing(r.options.MasterKeyId)
+	if err != nil {
+		log.WithError(err).Fatal("Unable to create decoder ring.")
+	}
+
+	log.Info("Loading and decrypting existing secrets.")
+	bag, err := secrets.LoadFromDatabase(r.db, ring)
+	if err != nil {
+		log.WithError(err).Fatal("Unable to load and decrypt existing secrets.")
+	}
+	log.WithField("count", bag.Len()).Info("Secrets loaded successfully.")
+
+	for k, v := range toLoad {
+		bag.Set(k, v)
+	}
+
+	if err = bag.SaveToDatabase(r.db, ring); err != nil {
+		log.WithError(err).Fatal("Unable to encrypt and save new secrets.")
+	}
+
+	log.WithFields(log.Fields{"count": bag.Len(), "added": len(toLoad)}).Info("Secrets added successfully.")
 }
 
 func diff() {

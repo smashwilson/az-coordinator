@@ -64,6 +64,10 @@ func LoadFromDatabase(db *sql.DB, ring *DecoderRing) (*SecretsBag, error) {
 	return &bag, nil
 }
 
+func (bag *SecretsBag) Len() int {
+	return len(bag.secrets)
+}
+
 func (bag *SecretsBag) Set(key string, value string) {
 	bag.secrets[key] = value
 }
