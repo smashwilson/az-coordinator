@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"io"
+	"os"
 	"text/template"
 )
 
@@ -10,11 +11,13 @@ const (
 	TypeSimple  = iota
 	TypeTimer   = iota
 	TypeOneShot = iota
+	TypeSelf    = iota
 )
 
 type resolvedSystemdUnit struct {
-	U   DesiredSystemdUnit
-	Env map[string]string
+	U     DesiredSystemdUnit
+	Env   map[string]string
+	Argv0 string
 }
 
 const simpleSource = `[Unit]
@@ -80,10 +83,28 @@ WantedBy=timers.target
 
 var timerTemplate = template.Must(template.New("timer").Parse(timerSource))
 
+const selfSource = `[Unit]
+Description=Oops, I Wrote A Container Orchestrator
+After=docker.service
+Wants=docker.service
+
+[Service]
+{{ range $key, $value := .Env }}
+Environment="{{ $key }}={{ $value }}"
+{{ end }}
+ExecStart={{ .Argv0 }} serve
+
+[Install]
+WantedBy=multi-user.target
+`
+
+var selfTemplate = template.Must(template.New("self").Parse(selfSource))
+
 var templatesByType = map[int]*template.Template{
 	TypeSimple:  simpleTemplate,
 	TypeOneShot: oneShotTemplate,
 	TypeTimer:   timerTemplate,
+	TypeSelf:    selfTemplate,
 }
 
 func getTemplate(templateType int) (*template.Template, error) {
@@ -116,8 +137,9 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 	}
 
 	return &resolvedSystemdUnit{
-		U:   unit,
-		Env: fullEnv,
+		U:     unit,
+		Env:   fullEnv,
+		Argv0: os.Args[0],
 	}, errs
 }
 
