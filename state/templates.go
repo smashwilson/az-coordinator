@@ -41,7 +41,7 @@ ExecStart=/usr/bin/docker run \
   {{ .U.Container.ImageName }}:{{ .U.Container.ImageTag }}
 
 [Install]
-WantedBy=timers.target
+WantedBy=multi-user.target
 `
 
 var simpleTemplate = template.Must(template.New("simple").Parse(simpleSource))
