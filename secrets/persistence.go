@@ -105,7 +105,7 @@ func (bag SecretsBag) ActualTLSFiles() (map[string][]byte, error) {
 		actual, err := ioutil.ReadFile(path)
 		if err == nil {
 			actualContents[path] = actual
-		} else if err == os.ErrNotExist {
+		} else if os.IsNotExist(err) {
 			actualContents[path] = nil
 		} else {
 			return nil, err
