@@ -104,7 +104,7 @@ func setSecrets() {
 		writeHelp(os.Stderr, 1)
 	}
 
-	var r = Prepare(needs{options: true, db: true})
+	var r = prepare(needs{options: true, db: true})
 
 	var toLoad map[string]string
 	inf, err := os.Open(flag.Arg(1))
@@ -117,7 +117,7 @@ func setSecrets() {
 	}
 
 	log.Info("Creating decoder ring.")
-	ring, err := secrets.NewDecoderRing(r.options.MasterKeyId)
+	ring, err := secrets.NewDecoderRing(r.options.MasterKeyID)
 	if err != nil {
 		log.WithError(err).Fatal("Unable to create decoder ring.")
 	}
@@ -141,7 +141,7 @@ func setSecrets() {
 }
 
 func diff() {
-	var r = Prepare(needs{session: true})
+	var r = prepare(needs{session: true})
 
 	log.Info("Reading desired state.")
 	desired, err := r.session.ReadDesiredState()
@@ -170,7 +170,7 @@ func diff() {
 }
 
 func sync() {
-	r := Prepare(needs{session: true})
+	r := prepare(needs{session: true})
 	delta := performSync(r.session)
 
 	encoder := json.NewEncoder(os.Stdout)
@@ -181,7 +181,7 @@ func sync() {
 }
 
 func serve() {
-	r := Prepare(needs{
+	r := prepare(needs{
 		options: true,
 		ring:    true,
 		session: true,

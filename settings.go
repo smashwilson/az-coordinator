@@ -11,15 +11,14 @@ type options struct {
 	ListenAddress string `json:"listen_address"`
 	DatabaseURL   string `json:"database_url"`
 	AuthToken     string `json:"auth_token"`
-	MasterKeyId   string `json:"master_key_id"`
+	MasterKeyID   string `json:"master_key_id"`
 }
 
 func getEnvironmentSetting(varName string, defaultValue string) string {
 	if value, ok := os.LookupEnv(varName); ok {
 		return value
-	} else {
-		return defaultValue
 	}
+	return defaultValue
 }
 
 func loadOptions() (*options, error) {

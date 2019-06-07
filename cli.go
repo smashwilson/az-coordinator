@@ -22,7 +22,7 @@ type results struct {
 	session *state.Session
 }
 
-func Prepare(n needs) results {
+func prepare(n needs) results {
 	var (
 		r   results
 		err error
@@ -45,7 +45,7 @@ func Prepare(n needs) results {
 
 	if n.ring || n.session {
 		log.Info("Creating decoder ring.")
-		r.ring, err = secrets.NewDecoderRing(r.options.MasterKeyId)
+		r.ring, err = secrets.NewDecoderRing(r.options.MasterKeyID)
 		if err != nil {
 			log.WithError(err).Fatal("Unable to create decoder ring.")
 		}
