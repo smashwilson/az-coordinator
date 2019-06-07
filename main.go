@@ -95,7 +95,34 @@ func writeHelp(out io.Writer, exitCode int) {
 }
 
 func initialize() {
-	//
+	var r = prepare(needs{db: true})
+
+	if _, err := r.db.Exec(`
+		CREATE TABLE secrets (
+			ciphertext bytea NOT NULL
+		)
+	`); err != nil {
+		log.WithError(err).Fatal("Unable to create secrets table.")
+	}
+
+	if _, err := r.db.Exec(`
+		CREATE TABLE state_systemd_units (
+			path TEXT NOT NULL,
+			type INTEGER NOT NULL,
+			container_name TEXT NOT NULL,
+			container_image_name TEXT NOT NULL,
+			container_image_tag TEXT NOT NULL,
+			secrets JSONB NOT NULL,
+			env JSONB NOT NULL,
+			ports JSONB NOT NULL,
+			volumes JSONB NOT NULL,
+			schedule TEXT
+		)
+	`); err != nil {
+		log.WithError(err).Fatal("Unable to create secrets table.")
+	}
+
+	log.Info("Coordinator tables initialized.")
 }
 
 func setSecrets() {
