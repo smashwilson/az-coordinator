@@ -59,7 +59,6 @@ func LoadFromDatabase(db *sql.DB, ring *DecoderRing) (*SecretsBag, error) {
 
 		bag.secrets[matches[1]] = matches[2]
 	}
-	log.WithField("count", len(bag.secrets)).Debug("Secrets loaded.")
 
 	return &bag, nil
 }
