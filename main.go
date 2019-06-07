@@ -50,8 +50,8 @@ func main() {
 		writeHelp(os.Stdout, 0)
 	}
 
-	if flag.NArg() != 1 {
-		log.Error("You must provide exactly one command.")
+	if flag.NArg() < 1 {
+		log.Error("You must provide at least one command.")
 		writeHelp(os.Stderr, 1)
 	}
 
