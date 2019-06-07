@@ -29,6 +29,7 @@ func newServer(opts *options, db *sql.DB, ring *secrets.DecoderRing) server {
 	http.HandleFunc("/", s.handleRoot)
 	http.HandleFunc("/desired", s.protected(s.handleListDesired))
 	http.HandleFunc("/actual", s.protected(s.handleListActual))
+	http.HandleFunc("/diff", s.protected(s.handleDiff))
 	http.HandleFunc("/sync", s.protected(s.handleSync))
 
 	return s
@@ -97,6 +98,40 @@ func (s server) handleListActual(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = json.NewEncoder(w).Encode(&actual); err != nil {
+		log.WithError(err).Error("Unable to serialize JSON.")
+		w.WriteHeader(500)
+		fmt.Fprintf(w, "Unable to serialize JSON.\n")
+		return
+	}
+}
+
+func (s server) handleDiff(w http.ResponseWriter, r *http.Request) {
+	session, err := state.NewSession(s.db, s.ring)
+	if err != nil {
+		log.WithError(err).Error("Unable to establish a session.")
+		w.WriteHeader(500)
+		fmt.Fprintf(w, "Unable to establish a session.\n")
+		return
+	}
+
+	actual, err := session.ReadActualState()
+	if err != nil {
+		log.WithError(err).Error("Unable to load the actual system state.")
+		w.WriteHeader(500)
+		fmt.Fprintf(w, "Unable to load the actual system state.\n")
+		return
+	}
+
+	desired, err := session.ReadDesiredState()
+	if err != nil {
+		log.WithError(err).Error("Unable to load the desired system state.")
+		w.WriteHeader(500)
+		fmt.Fprintf(w, "Unable to load the desired system state.\n")
+		return
+	}
+
+	delta := session.Between(desired, actual)
+	if err = json.NewEncoder(w).Encode(&delta); err != nil {
 		log.WithError(err).Error("Unable to serialize JSON.")
 		w.WriteHeader(500)
 		fmt.Fprintf(w, "Unable to serialize JSON.\n")
