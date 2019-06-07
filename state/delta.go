@@ -29,7 +29,7 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 		unitsToChange  = make([]DesiredSystemdUnit, 0)
 		unitsToRestart = make([]DesiredSystemdUnit, 0)
 		unitsToRemove  = make([]ActualSystemdUnit, 0)
-		filesToWrite   = make([]string, len(desired.Files))
+		filesToWrite   = make([]string, 0, len(desired.Files))
 
 		fileContentByPath = make(map[string][]byte, len(desired.Files))
 		desiredByName     = make(map[string]DesiredSystemdUnit)
@@ -133,7 +133,7 @@ func (d Delta) Apply() []error {
 		errs         = make([]error, 0)
 		session      = d.session
 		needsReload  = false
-		restartUnits = make([]string, len(d.UnitsToChange)+len(d.UnitsToRestart))
+		restartUnits = make([]string, 0, len(d.UnitsToChange)+len(d.UnitsToRestart))
 	)
 
 	for filePath, fileContent := range d.fileContent {
@@ -181,7 +181,7 @@ func (d Delta) Apply() []error {
 
 	// Stop and disable unit files we intend to remove.
 	stops := make(chan string, len(d.UnitsToRemove))
-	disablePaths := make([]string, len(d.UnitsToRemove))
+	disablePaths := make([]string, 0, len(d.UnitsToRemove))
 	for _, unit := range d.UnitsToRemove {
 		disablePaths = append(disablePaths, unit.Path)
 
@@ -207,7 +207,7 @@ func (d Delta) Apply() []error {
 
 	// Start and enable newly created units.
 	starts := make(chan string, len(d.UnitsToAdd))
-	enablePaths := make([]string, len(d.UnitsToAdd))
+	enablePaths := make([]string, 0, len(d.UnitsToAdd))
 	for _, unit := range d.UnitsToAdd {
 		enablePaths = append(enablePaths, unit.Path)
 		if _, err := session.conn.StartUnit(unit.UnitName(), "replace", starts); err != nil {

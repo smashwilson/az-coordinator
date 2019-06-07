@@ -53,7 +53,7 @@ func (session Session) ReadDesiredState() (*DesiredState, error) {
 	}
 	defer unitRows.Close()
 
-	units := make([]DesiredSystemdUnit, 10)
+	units := make([]DesiredSystemdUnit, 0, 10)
 	for unitRows.Next() {
 		var (
 			rawSecrets []byte

@@ -32,7 +32,7 @@ func (session Session) ReadActualState() (*ActualState, error) {
 		return nil, err
 	}
 
-	units := make([]ActualSystemdUnit, len(listedUnits))
+	units := make([]ActualSystemdUnit, 0, len(listedUnits))
 	for _, listedUnit := range listedUnits {
 		content, readErr := ioutil.ReadFile(listedUnit.Path)
 		if readErr != nil {
