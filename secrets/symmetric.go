@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"fmt"
 	"io"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -59,7 +60,11 @@ func (ring DecoderRing) Encrypt(plaintext string) ([]byte, error) {
 }
 
 func (ring DecoderRing) Decrypt(ciphertext []byte) (*string, error) {
-	keyCiphertext := ciphertext[:16]
+	if len(ciphertext) < 168 {
+		return nil, fmt.Errorf("Ciphertext too short: %d", len(ciphertext))
+	}
+
+	keyCiphertext := ciphertext[:168]
 	decryptResult, err := ring.kmsService.Decrypt(&kms.DecryptInput{
 		CiphertextBlob: keyCiphertext,
 	})
@@ -78,8 +83,12 @@ func (ring DecoderRing) Decrypt(ciphertext []byte) (*string, error) {
 		return nil, err
 	}
 
-	nonce := ciphertext[16 : 16+gcm.NonceSize()]
-	messageCiphertext := ciphertext[16+gcm.NonceSize():]
+	if len(ciphertext) < 168+gcm.NonceSize() {
+		return nil, fmt.Errorf("Ciphertext too short: %d", len(ciphertext))
+	}
+
+	nonce := ciphertext[168 : 168+gcm.NonceSize()]
+	messageCiphertext := ciphertext[168+gcm.NonceSize():]
 
 	messagePlaintext, err := gcm.Open(nil, nonce, messageCiphertext, nil)
 	if err != nil {
