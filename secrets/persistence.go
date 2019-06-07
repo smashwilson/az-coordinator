@@ -142,6 +142,10 @@ func (bag SecretsBag) SaveToDatabase(db *sql.DB, ring *DecoderRing) error {
 		}
 	}()
 
+	if _, err = tx.Exec("TRUNCATE TABLE secrets"); err != nil {
+		return err
+	}
+
 	insert, err := tx.Prepare(pq.CopyIn("secrets", "ciphertext"))
 	if err != nil {
 		return err
