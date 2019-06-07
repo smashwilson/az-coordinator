@@ -115,7 +115,7 @@ func (bag SecretsBag) ActualTLSFiles() (map[string][]byte, error) {
 }
 
 func (bag SecretsBag) SaveToDatabase(db *sql.DB, ring *DecoderRing) error {
-	var ciphertexts = make([][]byte, len(bag.secrets))
+	var ciphertexts = make([][]byte, 0, len(bag.secrets))
 	for key, value := range bag.secrets {
 		plaintext := key + "=" + value
 		ciphertext, err := ring.Encrypt(plaintext)
