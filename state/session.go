@@ -20,16 +20,19 @@ type Session struct {
 }
 
 func NewSession(db *sql.DB, ring *secrets.DecoderRing) (*Session, error) {
+	log.Debug("Creating Docker client.")
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return nil, err
 	}
 
+	log.Debug("Establishing system DBus connection.")
 	conn, err := dbus.NewSystemConnection()
 	if err != nil {
 		return nil, err
 	}
 
+	log.Debug("Loading latest secrets from database.")
 	secrets, err := secrets.LoadFromDatabase(db, ring)
 	if err != nil {
 		return nil, err

@@ -44,7 +44,7 @@ func prepare(n needs) results {
 	}
 
 	if n.ring || n.session {
-		log.Info("Creating decoder ring.")
+		log.WithField("keyID", r.options.MasterKeyID).Info("Creating decoder ring.")
 		r.ring, err = secrets.NewDecoderRing(r.options.MasterKeyID)
 		if err != nil {
 			log.WithError(err).Fatal("Unable to create decoder ring.")
@@ -52,6 +52,7 @@ func prepare(n needs) results {
 	}
 
 	if n.session {
+		log.Info("Establishing session.")
 		r.session, err = state.NewSession(r.db, r.ring)
 		if err != nil {
 			log.WithError(err).Fatal("Unable to create session.")
