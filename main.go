@@ -183,6 +183,7 @@ func sync() {
 func serve() {
 	r := Prepare(needs{
 		options: true,
+		ring:    true,
 		session: true,
 		db:      true,
 	})
@@ -191,7 +192,7 @@ func serve() {
 	delta := performSync(r.session)
 	log.WithField("delta", delta).Debug("Delta applied.")
 
-	s := newServer(r.options, r.db)
+	s := newServer(r.options, r.db, r.ring)
 	if err := s.listen(); err != nil {
 		log.Fatal(err)
 	}

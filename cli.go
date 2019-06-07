@@ -11,12 +11,14 @@ import (
 type needs struct {
 	options bool
 	db      bool
+	ring    bool
 	session bool
 }
 
 type results struct {
 	options *options
 	db      *sql.DB
+	ring    *secrets.DecoderRing
 	session *state.Session
 }
 
@@ -41,14 +43,16 @@ func Prepare(n needs) results {
 		}
 	}
 
-	if n.session {
+	if n.ring || n.session {
 		log.Info("Creating decoder ring.")
-		ring, rErr := secrets.NewDecoderRing(r.options.MasterKeyId)
-		if rErr != nil {
-			log.WithError(rErr).Fatal("Unable to create decoder ring.")
+		r.ring, err = secrets.NewDecoderRing(r.options.MasterKeyId)
+		if err != nil {
+			log.WithError(err).Fatal("Unable to create decoder ring.")
 		}
+	}
 
-		r.session, err = state.NewSession(r.db, ring)
+	if n.session {
+		r.session, err = state.NewSession(r.db, r.ring)
 		if err != nil {
 			log.WithError(err).Fatal("Unable to create session.")
 		}
