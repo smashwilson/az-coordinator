@@ -8,10 +8,17 @@ import (
 )
 
 const (
-	TypeSimple  = iota
-	TypeTimer   = iota
+	// TypeSimple units manage a persistent Docker container as a daemon.
+	TypeSimple = iota
+
+	// TypeTimer units fire another unit on a schedule.
+	TypeTimer = iota
+
+	// TypeOneShot units execute a container and expect it to terminate in an order fashion.
 	TypeOneShot = iota
-	TypeSelf    = iota
+
+	// TypeSelf is the special unit used to managed the az-coordinator binary itself.
+	TypeSelf = iota
 )
 
 type resolvedSystemdUnit struct {
@@ -110,9 +117,8 @@ var templatesByType = map[int]*template.Template{
 func getTemplate(templateType int) (*template.Template, error) {
 	if t, ok := templatesByType[templateType]; ok {
 		return t, nil
-	} else {
-		return nil, fmt.Errorf("Invalid template type: %d", templateType)
 	}
+	return nil, fmt.Errorf("Invalid template type: %d", templateType)
 }
 
 func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSystemdUnit, []error) {
@@ -143,6 +149,8 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 	}, errs
 }
 
+// WriteUnit uses the template requested by a DesiredSystemdUnit to generate the expected contents of a
+// unit file.
 func (session *Session) WriteUnit(unit DesiredSystemdUnit, out io.Writer) []error {
 	errs := make([]error, 0)
 

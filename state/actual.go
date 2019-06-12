@@ -7,17 +7,29 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// ActualState represents a view of SystemD units and files presently on the host as of the time ReadActualState() is called.
 type ActualState struct {
+	// Units is a list of ActualSystemdUnits that are loaded and active.
 	Units []ActualSystemdUnit `json:"units"`
-	Files map[string][]byte   `json:"-"`
+
+	// Files is a map of paths and content of files that are currently on the filesystem.
+	Files map[string][]byte `json:"-"`
 }
 
+// ActualSystemdUnit is information about a SystemD unit that is currently loaded on this host.
 type ActualSystemdUnit struct {
-	Name    string `json:"name"`
-	Path    string `json:"path"`
+	// Name is the name of the unit as it's known to SystemD, like "docker.service".
+	Name string `json:"name"`
+
+	// Path is the path to the source of this unit on disk.
+	Path string `json:"path"`
+
+	// Content is the current content of the unit file on disk.
 	Content []byte `json:"content"`
 }
 
+// ReadActualState introspects SystemD and the filesystem to construct an ActualState instance that captures a
+// snapshot of the aspects of the host state that we care about managing.
 func (session Session) ReadActualState() (*ActualState, error) {
 	var (
 		conn    = session.conn
@@ -54,6 +66,7 @@ func (session Session) ReadActualState() (*ActualState, error) {
 	return &ActualState{Units: units, Files: files}, nil
 }
 
+// UnitName derives the internal name that SystemD uses for a unit from the path to its source file.
 func (unit ActualSystemdUnit) UnitName() string {
 	return path.Base(unit.Path)
 }

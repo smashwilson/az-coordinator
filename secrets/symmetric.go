@@ -12,11 +12,14 @@ import (
 	"github.com/aws/aws-sdk-go/service/kms"
 )
 
+// DecoderRing wraps an AWS key management service (KMS) connection with the logic necessary to accomplish
+// symmetric encryption backed by KMS-managed shared secrets.
 type DecoderRing struct {
 	kmsService  *kms.KMS
 	masterKeyId string
 }
 
+// NewDecoderRing connects to external AWS services.
 func NewDecoderRing(masterKeyId, awsRegion string) (*DecoderRing, error) {
 	session, err := session.NewSession(&aws.Config{
 		Region: &awsRegion,
@@ -29,6 +32,8 @@ func NewDecoderRing(masterKeyId, awsRegion string) (*DecoderRing, error) {
 	return &DecoderRing{kmsService: kmsService, masterKeyId: masterKeyId}, nil
 }
 
+// Encrypt uses this DecoderRing's master key to generate a one-time encryption key, encrypt the requested
+// payload with it, and return ciphertext containing the encrypted key and payload.
 func (ring DecoderRing) Encrypt(plaintext string) ([]byte, error) {
 	dataKeyResult, err := ring.kmsService.GenerateDataKey(&kms.GenerateDataKeyInput{
 		KeyId:   aws.String(ring.masterKeyId),
@@ -61,6 +66,8 @@ func (ring DecoderRing) Encrypt(plaintext string) ([]byte, error) {
 	return append(keyCiphertext, messageCiphertext...), nil
 }
 
+// Decrypt accepts ciphertext produced by an equivalent DecoderRing's Encrypt method and recovers the original
+// plaintext.
 func (ring DecoderRing) Decrypt(ciphertext []byte) (*string, error) {
 	if len(ciphertext) < 168 {
 		return nil, fmt.Errorf("Ciphertext too short: %d", len(ciphertext))

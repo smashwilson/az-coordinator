@@ -11,11 +11,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// DesiredState describes the target state of the system based on the contents of the coordinator database.
 type DesiredState struct {
 	Units []DesiredSystemdUnit `json:"units"`
 	Files map[string][]byte    `json:"-"`
 }
 
+// DesiredDockerContainer contains information about the Docker container image to be used by a SystemD unit.
 type DesiredDockerContainer struct {
 	Name      string `json:"name"`
 	ImageID   string `json:"image_id"`
@@ -23,6 +25,7 @@ type DesiredDockerContainer struct {
 	ImageTag  string `json:"image_tag"`
 }
 
+// DesiredSystemdUnit contains information about a SystemD unit managed by the coordinator.
 type DesiredSystemdUnit struct {
 	Path      string                 `json:"path"`
 	Type      int                    `json:"type"`
@@ -34,6 +37,8 @@ type DesiredSystemdUnit struct {
 	Schedule  string                 `json:"calendar,omitempty"`
 }
 
+// ReadDesiredState queries the database for the currently configured desired system state. DesiredDockerContainers
+// within the returned state will have no ImageID.
 func (session Session) ReadDesiredState() (*DesiredState, error) {
 	var (
 		db      = session.db
@@ -107,6 +112,8 @@ func (session Session) ReadDesiredState() (*DesiredState, error) {
 	return &DesiredState{Units: units, Files: files}, nil
 }
 
+// ReadImages queries Docker for the most recently created container images corresponding to the image names and tags requested by
+// each DesiredSystemdUnit. This call populates the ImageID of each DesiredDockerContainer.
 func (state *DesiredState) ReadImages(session *Session) error {
 	for _, unit := range state.Units {
 		imageSummaries, err := session.cli.ImageList(context.Background(), types.ImageListOptions{
@@ -128,6 +135,8 @@ func (state *DesiredState) ReadImages(session *Session) error {
 	return nil
 }
 
+// MakeDesired persists its caller within the database. Future calls to ReadDesiredState will include this unit
+// in its output.
 func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
 	var db = session.db
 
@@ -175,6 +184,7 @@ func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
 	return nil
 }
 
+// UnitName derives the SystemD logical unit name from the path of its source on disk.
 func (unit DesiredSystemdUnit) UnitName() string {
 	return path.Base(unit.Path)
 }

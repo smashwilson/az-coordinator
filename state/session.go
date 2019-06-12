@@ -12,6 +12,7 @@ import (
 	"github.com/smashwilson/az-coordinator/secrets"
 )
 
+// Session centralizes all of the resources necessary for a single request or operation.
 type Session struct {
 	db      *sql.DB
 	cli     *client.Client
@@ -19,6 +20,7 @@ type Session struct {
 	secrets *secrets.SecretsBag
 }
 
+// NewSession establishes all of the connections necessary to perform an operation.
 func NewSession(db *sql.DB, ring *secrets.DecoderRing) (*Session, error) {
 	log.Debug("Creating Docker client.")
 	cli, err := client.NewClientWithOpts(client.FromEnv)
@@ -46,6 +48,9 @@ func NewSession(db *sql.DB, ring *secrets.DecoderRing) (*Session, error) {
 	}, nil
 }
 
+// PullAllImages concurrently pulls the latest versions of all Docker container images used by desired SystemD units
+// referenced by the current system state. Call this between ReadDesiredState and ReadImages to desire the most recently
+// published version of each image.
 func (s Session) PullAllImages(state DesiredState) []error {
 	errs := make([]error, 0)
 
@@ -56,7 +61,7 @@ func (s Session) PullAllImages(state DesiredState) []error {
 	}
 
 	results := make(chan error, len(imageRefs))
-	for ref, _ := range imageRefs {
+	for ref := range imageRefs {
 		go s.pullImage(ref, results)
 	}
 	for i := 0; i < len(imageRefs); i++ {
@@ -84,6 +89,7 @@ func (s Session) pullImage(ref string, done chan<- error) {
 	done <- nil
 }
 
+// Close disposes of any connection resources acquired by NewSession.
 func (s Session) Close() error {
 	s.conn.Close()
 	return s.cli.Close()

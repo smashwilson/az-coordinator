@@ -12,6 +12,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Delta is a JSON-serializable structure enumerating the changes necessary to bring the actual system state
+// in alignment with the desired state.
 type Delta struct {
 	UnitsToAdd     []DesiredSystemdUnit `json:"units_to_add"`
 	UnitsToChange  []DesiredSystemdUnit `json:"units_to_change"`
@@ -23,6 +25,8 @@ type Delta struct {
 	session     *Session
 }
 
+// Between compares desired and actual system state and produces a Delta necessary to convert the observed actual
+// state to the desired state.
 func (session *Session) Between(desired *DesiredState, actual *ActualState) Delta {
 	var (
 		unitsToAdd     = make([]DesiredSystemdUnit, 0)
@@ -93,7 +97,7 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 			}
 
 			// Schedule the unit for restart if a volume-mounted file is due to be modified.
-			for hostPath, _ := range desired.Volumes {
+			for hostPath := range desired.Volumes {
 				if _, ok := fileContentByPath[hostPath]; ok {
 					// A mounted file has been written. Restart the unit to pick it up.
 					unitsToRestart = append(unitsToRestart, desired)
@@ -128,6 +132,8 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 	}
 }
 
+// Apply enacts the changes described by a Delta on the system. Individual operations that fail append errors to
+// the returned error slice, but do not prevent subsequent operations from being attempted.
 func (d Delta) Apply() []error {
 	var (
 		errs         = make([]error, 0)
