@@ -12,6 +12,7 @@ type options struct {
 	DatabaseURL   string `json:"database_url"`
 	AuthToken     string `json:"auth_token"`
 	MasterKeyID   string `json:"master_key_id"`
+	AWSRegion     string `json:"aws_region"`
 }
 
 func getEnvironmentSetting(varName string, defaultValue string) string {

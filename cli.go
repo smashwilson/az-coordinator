@@ -45,7 +45,7 @@ func prepare(n needs) results {
 
 	if n.ring || n.session {
 		log.WithField("keyID", r.options.MasterKeyID).Info("Creating decoder ring.")
-		r.ring, err = secrets.NewDecoderRing(r.options.MasterKeyID)
+		r.ring, err = secrets.NewDecoderRing(r.options.MasterKeyID, r.options.AWSRegion)
 		if err != nil {
 			log.WithError(err).Fatal("Unable to create decoder ring.")
 		}

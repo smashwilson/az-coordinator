@@ -17,8 +17,10 @@ type DecoderRing struct {
 	masterKeyId string
 }
 
-func NewDecoderRing(masterKeyId string) (*DecoderRing, error) {
-	session, err := session.NewSession()
+func NewDecoderRing(masterKeyId, awsRegion string) (*DecoderRing, error) {
+	session, err := session.NewSession(&aws.Config{
+		Region: &awsRegion,
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -144,7 +144,7 @@ func setSecrets() {
 	}
 
 	log.Info("Creating decoder ring.")
-	ring, err := secrets.NewDecoderRing(r.options.MasterKeyID)
+	ring, err := secrets.NewDecoderRing(r.options.MasterKeyID, r.options.AWSRegion)
 	if err != nil {
 		log.WithError(err).Fatal("Unable to create decoder ring.")
 	}
