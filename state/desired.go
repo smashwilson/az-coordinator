@@ -2,8 +2,9 @@ package state
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"path"
 
 	"github.com/docker/docker/api/types"
@@ -27,6 +28,7 @@ type DesiredDockerContainer struct {
 
 // DesiredSystemdUnit contains information about a SystemD unit managed by the coordinator.
 type DesiredSystemdUnit struct {
+	ID        *int                   `json:"id,omitempty"`
 	Path      string                 `json:"path"`
 	Type      int                    `json:"type"`
 	Container DesiredDockerContainer `json:"container"`
@@ -47,7 +49,7 @@ func (session Session) ReadDesiredState() (*DesiredState, error) {
 
 	unitRows, err := db.Query(`
     SELECT
-      path, type,
+      id, path, type,
       container_name, container_image_name, container_image_tag,
       secrets, env, ports, volumes,
       schedule
@@ -69,7 +71,7 @@ func (session Session) ReadDesiredState() (*DesiredState, error) {
 
 		unit := DesiredSystemdUnit{}
 		if err = unitRows.Scan(
-			&unit.Path, &unit.Type,
+			&unit.ID, &unit.Path, &unit.Type,
 			&unit.Container.Name, &unit.Container.ImageName, &unit.Container.ImageTag,
 			&rawSecrets, &rawEnv, &rawPorts, &rawVolumes,
 			&unit.Schedule,
@@ -138,6 +140,10 @@ func (state *DesiredState) ReadImages(session *Session) error {
 // MakeDesired persists its caller within the database. Future calls to ReadDesiredState will include this unit
 // in its output.
 func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
+	if unit.ID != nil {
+		return fmt.Errorf("Attempt to re-persist already persisted unit: %d", unit.ID)
+	}
+
 	var db = session.db
 
 	rawSecrets, err := json.Marshal(unit.Secrets)
@@ -160,28 +166,79 @@ func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
 		return err
 	}
 
-	err = db.QueryRow(`
+	createdRow := db.QueryRow(`
     INSERT INTO state_systemd_units
       (path, type,
         container_name, container_image_name, container_image_tag,
         secrets, env, ports, volumes,
         schedule)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-    ON CONFLICT DO UPDATE SET
-      type = EXCLUDED.type,
-      container_image = EXCLUDED.container_image, container_tag = EXCLUDED.container_tag,
-      secrets = EXCLUDED.secrets, env = EXCLUDED.env, ports = EXCLUDED.ports, volumes = EXCLUDED.volumes,
-      schedule = EXCLUDED.schedule
+	RETURNING id
   `,
 		unit.Path, unit.Type,
 		unit.Container.Name, unit.Container.ImageName, unit.Container.ImageTag,
 		rawSecrets, rawEnv, rawPorts, rawVolumes,
 		unit.Schedule,
-	).Scan()
-	if err != sql.ErrNoRows {
+	)
+
+	return createdRow.Scan(&unit.ID)
+}
+
+// Update modifies an existing unit to match its in-memory representation.
+func (unit DesiredSystemdUnit) Update(session Session) error {
+	if unit.ID == nil {
+		return errors.New("Attempt to update an un-persisted desired unit")
+	}
+
+	var db = session.db
+
+	rawSecrets, err := json.Marshal(unit.Secrets)
+	if err != nil {
 		return err
 	}
-	return nil
+
+	rawEnv, err := json.Marshal(unit.Env)
+	if err != nil {
+		return err
+	}
+
+	rawPorts, err := json.Marshal(unit.Ports)
+	if err != nil {
+		return err
+	}
+
+	rawVolumes, err := json.Marshal(unit.Volumes)
+	if err != nil {
+		return err
+	}
+
+	return db.QueryRow(`
+	UPDATE state_systemd_units
+	SET
+		path = $1, type = $2,
+		container_name = $3, container_image_name = $4, container_image_tag = $5,
+		secrets = $6, env = $7, ports = $8, volumes = $9,
+		schedule = $10
+	WHERE id = $11
+	`,
+		unit.Path, unit.Type,
+		unit.Container.Name, unit.Container.ImageName, unit.Container.ImageTag,
+		rawSecrets, rawEnv, rawPorts, rawVolumes,
+		unit.Schedule,
+	).Scan()
+}
+
+// Undesired requests that a unit should no longer be present on the system by removing it from the database.
+func (unit DesiredSystemdUnit) Undesired(session Session) error {
+	if unit.ID == nil {
+		return nil
+	}
+
+	var db = session.db
+
+	return db.QueryRow(`
+		DELETE FROM state_systemd_units WHERE id = $1
+	`, unit.ID).Scan()
 }
 
 // UnitName derives the SystemD logical unit name from the path of its source on disk.

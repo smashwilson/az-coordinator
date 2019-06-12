@@ -107,6 +107,7 @@ func initialize() {
 
 	if _, err := r.db.Exec(`
 		CREATE TABLE state_systemd_units (
+			id SERIAL PRIMARY KEY,
 			path TEXT NOT NULL,
 			type INTEGER NOT NULL,
 			container_name TEXT NOT NULL,
