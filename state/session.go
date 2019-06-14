@@ -3,7 +3,9 @@ package state
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"io/ioutil"
+	"strings"
 
 	"github.com/coreos/go-systemd/dbus"
 	"github.com/docker/docker/api/types"
@@ -87,6 +89,22 @@ func (s Session) pullImage(ref string, done chan<- error) {
 	log.Debugf("ImagePull payload:\n%s\n---\n", payload)
 
 	done <- nil
+}
+
+// ValidateSecretKeys returns an error if any of the keys requested in a set are not loaded in the
+// session's SecretBag and nil if all are present.
+func (s Session) ValidateSecretKeys(secretKeys []string) error {
+	missing := make([]string, 0)
+	for _, key := range secretKeys {
+		if !s.secrets.Has(key) {
+			missing = append(missing, key)
+		}
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("Unrecognized secret keys: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 // Close disposes of any connection resources acquired by NewSession.
