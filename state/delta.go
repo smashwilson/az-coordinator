@@ -182,7 +182,8 @@ func (d Delta) Apply() []error {
 	}
 
 	for _, unit := range d.UnitsToAdd {
-		f, err := os.OpenFile(unit.Path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		needsReload = true
+		f, err := os.OpenFile(unit.Path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("Unable to create unit file %s (%v)", unit.Path, err))
 			continue
@@ -255,7 +256,7 @@ func (d Delta) Apply() []error {
 	if needsReload {
 		log.Debug("Reloading systemd unit files.")
 		if err := session.conn.Reload(); err != nil {
-			errs = append(errs, err)
+			errs = append(errs, fmt.Errorf("Unable to trigger a systemd reload (%v)", err))
 			return errs
 		}
 		log.Debug("Reloaded successfully.")
