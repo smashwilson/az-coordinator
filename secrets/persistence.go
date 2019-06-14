@@ -38,7 +38,7 @@ func LoadFromDatabase(db *sql.DB, ring *DecoderRing) (*SecretsBag, error) {
 	var bag SecretsBag
 	bag.secrets = make(map[string]string)
 
-	keyRx := regexp.MustCompile(`\A([^=]+)=(.*)\z`)
+	keyRx := regexp.MustCompile(`\A([^=]+)=(?s:(.*))\z`)
 
 	rows, err := db.Query("SELECT ciphertext FROM secrets")
 	if err != nil {
