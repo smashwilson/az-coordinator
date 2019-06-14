@@ -58,10 +58,14 @@ func (s Session) PullAllImages(state DesiredState) []error {
 
 	imageRefs := make(map[string]bool, len(state.Units))
 	for _, unit := range state.Units {
-		ref := unit.Container.ImageName + ":" + unit.Container.ImageTag
-		imageRefs[ref] = true
+		if len(unit.Container.ImageName) > 0 && len(unit.Container.ImageTag) > 0 {
+			ref := unit.Container.ImageName + ":" + unit.Container.ImageTag
+			imageRefs[ref] = true
+			log.WithField("ref", ref).Debug("Scheduling docker pull.")
+		}
 	}
 
+	log.WithField("count", len(imageRefs)).Debug("Beginning docker pulls.")
 	results := make(chan error, len(imageRefs))
 	for ref := range imageRefs {
 		go s.pullImage(ref, results)
@@ -69,6 +73,7 @@ func (s Session) PullAllImages(state DesiredState) []error {
 	for i := 0; i < len(imageRefs); i++ {
 		errs = append(errs, <-results)
 	}
+	log.WithField("count", len(imageRefs)).Debug("Docker pulls complete.")
 
 	return errs
 }
@@ -86,7 +91,7 @@ func (s Session) pullImage(ref string, done chan<- error) {
 		done <- err
 		return
 	}
-	log.Debugf("ImagePull payload:\n%s\n---\n", payload)
+	log.WithField("ref", ref).Debugf("ImagePull payload:\n%s\n---\n", payload)
 
 	done <- nil
 }
