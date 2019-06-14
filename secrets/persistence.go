@@ -98,6 +98,12 @@ func (bag SecretsBag) GetRequired(key string) (string, error) {
 	return "", fmt.Errorf("Missing required secret [%v]", key)
 }
 
+// Has returns true if a key corresponds to a known, loaded secret, and false otherwise.
+func (bag SecretsBag) Has(key string) bool {
+	_, ok := bag.secrets[key]
+	return ok
+}
+
 // DesiredTLSFiles constructs a map whose keys are paths on the filesystem and whose values are the contents
 // of TLS-related files that are expected to be placed at those paths. An error is returned if any of the
 // required TLS secret keys are absent.
