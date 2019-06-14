@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"text/template"
 )
 
@@ -96,6 +97,7 @@ After=docker.service
 Wants=docker.service
 
 [Service]
+User=coordinator
 {{ range $key, $value := .Env }}
 Environment="{{ $key }}={{ $value }}"
 {{ end }}
@@ -145,6 +147,11 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 		fullEnv[k] = v
 	}
 
+	argv0, err := exec.LookPath(os.Args[0])
+	if err != nil {
+		errs = append(errs, err)
+	}
+
 	if len(errs) > 0 {
 		return nil, errs
 	}
@@ -152,7 +159,7 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 	return &resolvedSystemdUnit{
 		U:     unit,
 		Env:   fullEnv,
-		Argv0: os.Args[0],
+		Argv0: argv0,
 	}, errs
 }
 
