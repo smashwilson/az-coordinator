@@ -186,21 +186,23 @@ func (d Delta) Apply() []error {
 	}
 
 	// Stop and disable unit files we intend to remove.
-	stops := make(chan string, len(d.UnitsToRemove))
-	disablePaths := make([]string, 0, len(d.UnitsToRemove))
-	for _, unit := range d.UnitsToRemove {
-		disablePaths = append(disablePaths, unit.Path)
+	if len(d.UnitsToRemove) > 0 {
+		stops := make(chan string, len(d.UnitsToRemove))
+		disablePaths := make([]string, 0, len(d.UnitsToRemove))
+		for _, unit := range d.UnitsToRemove {
+			disablePaths = append(disablePaths, unit.Path)
 
-		if _, err := session.conn.StopUnit(unit.UnitName(), "replace", stops); err != nil {
-			errs = append(errs, fmt.Errorf("Unable to stop unit %s (%v)", unit.UnitName(), err))
-			session.conn.KillUnit(unit.Path, 9)
+			if _, err := session.conn.StopUnit(unit.UnitName(), "replace", stops); err != nil {
+				errs = append(errs, fmt.Errorf("Unable to stop unit %s (%v)", unit.UnitName(), err))
+				session.conn.KillUnit(unit.Path, 9)
+			}
 		}
-	}
-	for i := 0; i < len(d.UnitsToRemove); i++ {
-		<-stops
-	}
-	if _, err := session.conn.DisableUnitFiles(disablePaths, false); err != nil {
-		errs = append(errs, fmt.Errorf("Unable to disable units %v (%v)", disablePaths, err))
+		for i := 0; i < len(d.UnitsToRemove); i++ {
+			<-stops
+		}
+		if _, err := session.conn.DisableUnitFiles(disablePaths, false); err != nil {
+			errs = append(errs, fmt.Errorf("Unable to disable units %v (%v)", disablePaths, err))
+		}
 	}
 
 	// Reload to pick up any rewritten unit files.
