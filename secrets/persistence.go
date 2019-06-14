@@ -13,13 +13,13 @@ import (
 
 const (
 	// FilenameTLSCertificate is the path to the file containing the full chain of public TLS certificates.
-	FilenameTLSCertificate = "/etc/ssl/pushbot.party/fullchain.pem"
+	FilenameTLSCertificate = "/etc/ssl/az/pushbot.party/fullchain.pem"
 
 	// FilenameTLSKey is the path to the file containing the TLS private key.
-	FilenameTLSKey = "/etc/ssl/pushbot.party/privkey.pem"
+	FilenameTLSKey = "/etc/ssl/az/pushbot.party/privkey.pem"
 
 	// FilenameDHParams is the path to a file containing pre-generated DH parameters.
-	FilenameDHParams = "/etc/ssl/dhparams.pem"
+	FilenameDHParams = "/etc/ssl/az/dhparams.pem"
 )
 
 var tlsKeysToPath = map[string]string{
