@@ -114,6 +114,13 @@ var templatesByType = map[int]*template.Template{
 	TypeSelf:    selfTemplate,
 }
 
+var typesByName = map[string]int{
+	"simple":  TypeSimple,
+	"oneshot": TypeOneShot,
+	"timer":   TypeTimer,
+	"self":    TypeSelf,
+}
+
 func getTemplate(templateType int) (*template.Template, error) {
 	if t, ok := templatesByType[templateType]; ok {
 		return t, nil
@@ -147,6 +154,15 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 		Env:   fullEnv,
 		Argv0: os.Args[0],
 	}, errs
+}
+
+// GetTypeWithName returns the unit type enum value corresponding with a friendly string name, or
+// an error if the type is unrecognized.
+func GetTypeWithName(name string) (int, error) {
+	if tp, ok := typesByName[name]; ok {
+		return tp, nil
+	}
+	return 0, fmt.Errorf("Unrecognized type name: %s", name)
 }
 
 // WriteUnit uses the template requested by a DesiredSystemdUnit to generate the expected contents of a
