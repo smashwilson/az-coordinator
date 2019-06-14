@@ -45,6 +45,7 @@ func (s server) protected(handler func(http.ResponseWriter, *http.Request)) func
 		if _, password, ok := r.BasicAuth(); !ok || password != s.opts.AuthToken {
 			w.WriteHeader(401)
 			w.Write([]byte("Unauthorized"))
+			return
 		}
 
 		handler(w, r)
