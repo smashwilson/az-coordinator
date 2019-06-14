@@ -8,11 +8,12 @@ import (
 )
 
 type options struct {
-	ListenAddress string `json:"listen_address"`
-	DatabaseURL   string `json:"database_url"`
-	AuthToken     string `json:"auth_token"`
-	MasterKeyID   string `json:"master_key_id"`
-	AWSRegion     string `json:"aws_region"`
+	ListenAddress    string `json:"listen_address"`
+	DatabaseURL      string `json:"database_url"`
+	AuthToken        string `json:"auth_token"`
+	MasterKeyID      string `json:"master_key_id"`
+	AWSRegion        string `json:"aws_region"`
+	DockerAPIVersion string `json:"docker_api_version"`
 }
 
 func getEnvironmentSetting(varName string, defaultValue string) string {

@@ -23,9 +23,9 @@ type Session struct {
 }
 
 // NewSession establishes all of the connections necessary to perform an operation.
-func NewSession(db *sql.DB, ring *secrets.DecoderRing) (*Session, error) {
+func NewSession(db *sql.DB, ring *secrets.DecoderRing, dockerAPIVersion string) (*Session, error) {
 	log.Debug("Creating Docker client.")
-	cli, err := client.NewClientWithOpts(client.FromEnv)
+	cli, err := client.NewClientWithOpts(client.WithVersion(dockerAPIVersion), client.FromEnv)
 	if err != nil {
 		return nil, err
 	}
