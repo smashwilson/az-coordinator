@@ -189,12 +189,16 @@ func initialize() {
 		log.WithError(err).Error("Unable to change TLS credential directory ownership.")
 	}
 
-	if err := ioutil.WriteFile("/etc/dbus-1/system.d/az-coordinator.conf", []byte(dbusConf), 0600); err != nil {
+	if err := ioutil.WriteFile("/etc/dbus-1/system.d/az-coordinator.conf", []byte(dbusConf), 0644); err != nil {
 		log.WithError(err).Error("Unable to write DBus configuration file.")
 	}
 
-	if err := ioutil.WriteFile("/etc/polkit-1/rules.d/00-coordinator.conf", []byte(polkitConf), 0600); err != nil {
+	if err := ioutil.WriteFile("/etc/polkit-1/rules.d/00-coordinator.conf", []byte(polkitConf), 0644); err != nil {
 		log.WithError(err).Error("Unable to write polkit configuration file.")
+	}
+
+	if err := os.Chown("/etc/systemd/system", -1, gid); err != nil {
+		log.WithError(err).Error("Unable to change systemd unit file directory ownership.")
 	}
 
 	log.Info("Initialization complete.")
