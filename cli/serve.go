@@ -14,8 +14,14 @@ func serve() {
 	})
 
 	log.Info("Performing initial sync.")
-	delta := performSync(r.session)
-	log.WithField("delta", delta).Debug("Delta applied.")
+	delta, errs := r.session.Synchronize()
+	if len(errs) > 0 {
+		for _, err := range errs {
+			log.WithError(err).Warn("Synchronization error.")
+		}
+	} else {
+		log.WithField("delta", delta).Debug("Delta applied.")
+	}
 
 	s := web.NewServer(r.options, r.db, r.ring)
 	if err := s.Listen(); err != nil {

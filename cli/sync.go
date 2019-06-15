@@ -9,7 +9,14 @@ import (
 
 func sync() {
 	r := prepare(needs{session: true})
-	delta := performSync(r.session)
+	delta, errs := r.session.Synchronize()
+	if len(errs) > 0 {
+		for _, err := range errs {
+			log.WithError(err).Warn("Synchronization error.")
+		}
+	} else {
+		log.WithField("delta", delta).Debug("Delta applied.")
+	}
 
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")

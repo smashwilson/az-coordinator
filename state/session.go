@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -110,6 +111,41 @@ func (s Session) ValidateSecretKeys(secretKeys []string) error {
 		return fmt.Errorf("Unrecognized secret keys: %s", strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+// Synchronize brings local Docker images up to date, then reads desired and actual state, computes a
+// Delta between them, and applies it. The applied Delta is returned.
+func (s *Session) Synchronize() (*Delta, []error) {
+	log.Debug("Reading desired state.")
+	desired, err := s.ReadDesiredState()
+	if err != nil {
+		return nil, []error{err}
+	}
+
+	log.Debug("Pulling referenced images.")
+	if errs := s.PullAllImages(*desired); len(errs) > 0 {
+		return nil, append(errs, errors.New("pull errors"))
+	}
+
+	log.Debug("Reading updated docker images.")
+	if err = desired.ReadImages(s); err != nil {
+		return nil, []error{err, errors.New("unable to pull docker images")}
+	}
+
+	log.Debug("Reading actual state.")
+	actual, err := s.ReadActualState()
+	if err != nil {
+		return nil, []error{err, errors.New("unable to read system state")}
+	}
+
+	log.Debug("Computing delta.")
+	delta := s.Between(desired, actual)
+
+	if errs := delta.Apply(); len(errs) > 0 {
+		return nil, append(errs, errors.New("unable to apply delta"))
+	}
+
+	return &delta, nil
 }
 
 // Close disposes of any connection resources acquired by NewSession.
