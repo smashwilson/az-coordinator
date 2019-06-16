@@ -17,6 +17,8 @@ type Server struct {
 	opts *config.Options
 	db   *sql.DB
 	ring *secrets.DecoderRing
+
+	currentSync *syncProgress
 }
 
 // NewServer creates (but does not start) an HTTP server for the coordinator management interface.
