@@ -6,11 +6,10 @@ import (
 	"net/http"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/smashwilson/az-coordinator/state"
 )
 
 func (s Server) handleListActual(w http.ResponseWriter, r *http.Request) {
-	session, err := state.NewSession(s.db, s.ring, s.opts.DockerAPIVersion)
+	session, err := s.newSession()
 	if err != nil {
 		log.WithError(err).Error("Unable to establish a session.")
 		w.WriteHeader(http.StatusInternalServerError)
