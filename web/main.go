@@ -3,6 +3,9 @@ package web
 import (
 	"database/sql"
 	"net/http"
+	"regexp"
+
+	"github.com/smashwilson/az-coordinator/state"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/smashwilson/az-coordinator/config"
@@ -49,4 +52,20 @@ func (s Server) protected(handler func(http.ResponseWriter, *http.Request)) func
 
 		handler(w, r)
 	}
+}
+
+func (s Server) newSession() (*state.Session, error) {
+	return state.NewSession(s.db, s.ring, s.opts.DockerAPIVersion)
+}
+
+func extractID(rx *regexp.Regexp, w http.ResponseWriter, r *http.Request) (string, bool) {
+	ms := rx.FindStringSubmatch(r.URL.Path)
+	// (0) full match; (1) extracted id
+	if len(ms) != 2 {
+		log.WithField("path", r.URL.Path).Error("ID extraction regexp did not match")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("Not found"))
+		return "", false
+	}
+	return ms[1], true
 }
