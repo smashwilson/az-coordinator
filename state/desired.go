@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"path/filepath"
+	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
@@ -39,22 +41,17 @@ type DesiredSystemdUnit struct {
 	Schedule  string                 `json:"calendar,omitempty"`
 }
 
-// ReadDesiredState queries the database for the currently configured desired system state. DesiredDockerContainers
-// within the returned state will have no ImageID.
-func (session Session) ReadDesiredState() (*DesiredState, error) {
-	var (
-		db      = session.db
-		secrets = session.secrets
-	)
+func (session Session) readDesiredUnits(whereClause string, queryArgs ...interface{}) ([]DesiredSystemdUnit, error) {
+	var db = session.db
 
 	unitRows, err := db.Query(`
-    SELECT
-      id, path, type,
-      container_name, container_image_name, container_image_tag,
-      secrets, env, ports, volumes,
-      schedule
+    	SELECT
+      		id, path, type,
+      		container_name, container_image_name, container_image_tag,
+      		secrets, env, ports, volumes,
+      		schedule
 		FROM state_systemd_units
-  `)
+  	`+whereClause, queryArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -82,28 +79,37 @@ func (session Session) ReadDesiredState() (*DesiredState, error) {
 
 		if err = json.Unmarshal(rawSecrets, &unit.Secrets); err != nil {
 			log.WithError(err).WithField("unit", unit.UnitName()).Warn("Malformed secrets column in state_systemd_units row")
-			continue
 		}
 
 		if err = json.Unmarshal(rawEnv, &unit.Env); err != nil {
 			log.WithError(err).WithField("unit", unit.UnitName()).Warn("Malformed env column in state_systemd_units row")
 			log.Warnf("Contents:\n%s\n---\n", rawEnv)
-			continue
 		}
 
 		if err = json.Unmarshal(rawPorts, &unit.Ports); err != nil {
 			log.WithError(err).WithField("unit", unit.UnitName()).Warn("Malformed ports column in state_systemd_units row")
 			log.Warnf("Contents:\n%s\n---\n", rawPorts)
-			continue
 		}
 
 		if err = json.Unmarshal(rawVolumes, &unit.Volumes); err != nil {
 			log.WithError(err).WithField("unit", unit.UnitName()).Warn("Malformed volumes column in state_systemd_units row")
 			log.Warnf("Contents:\n%s\n---\n", rawVolumes)
-			continue
 		}
 
 		units = append(units, unit)
+	}
+
+	return units, nil
+}
+
+// ReadDesiredState queries the database for the currently configured desired system state. DesiredDockerContainers
+// within the returned state will have no ImageID.
+func (session Session) ReadDesiredState() (*DesiredState, error) {
+	var secrets = session.secrets
+
+	units, err := session.readDesiredUnits("")
+	if err != nil {
+		return nil, err
 	}
 
 	files, err := secrets.DesiredTLSFiles()
@@ -112,6 +118,21 @@ func (session Session) ReadDesiredState() (*DesiredState, error) {
 	}
 
 	return &DesiredState{Units: units, Files: files}, nil
+}
+
+// ReadDesiredUnit queries the database to load one specific desired systemd unit. It returns nil if no unit with the
+// requested id exists.
+func (session Session) ReadDesiredUnit(id int) (*DesiredSystemdUnit, error) {
+	units, err := session.readDesiredUnits("WHERE id = $1", id)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(units) == 0 {
+		return nil, nil
+	}
+
+	return &units[0], nil
 }
 
 // ReadImages queries Docker for the most recently created container images corresponding to the image names and tags requested by
@@ -135,6 +156,15 @@ func (state *DesiredState) ReadImages(session *Session) error {
 	}
 
 	return nil
+}
+
+// UndesireUnit requests that a unit should no longer be present on the system by removing it from the database.
+func (session Session) UndesireUnit(id int) error {
+	var db = session.db
+
+	return db.QueryRow(`
+		DELETE FROM state_systemd_units WHERE id = $1
+	`, id).Scan()
 }
 
 // MakeDesired persists its caller within the database. Future calls to ReadDesiredState will include this unit
@@ -228,20 +258,160 @@ func (unit DesiredSystemdUnit) Update(session Session) error {
 	).Scan()
 }
 
-// Undesired requests that a unit should no longer be present on the system by removing it from the database.
-func (unit DesiredSystemdUnit) Undesired(session Session) error {
-	if unit.ID == nil {
-		return nil
-	}
-
-	var db = session.db
-
-	return db.QueryRow(`
-		DELETE FROM state_systemd_units WHERE id = $1
-	`, unit.ID).Scan()
-}
-
 // UnitName derives the SystemD logical unit name from the path of its source on disk.
 func (unit DesiredSystemdUnit) UnitName() string {
 	return path.Base(unit.Path)
+}
+
+// DesiredSystemdUnitBuilder incrementally constructs and validates a DesiredUnit.
+type DesiredSystemdUnitBuilder struct {
+	unit *DesiredSystemdUnit
+}
+
+// BuildDesiredUnit creates a builder that can construct a new DesiredSystemdUnit.
+func BuildDesiredUnit() DesiredSystemdUnitBuilder {
+	return DesiredSystemdUnitBuilder{
+		unit: &DesiredSystemdUnit{},
+	}
+}
+
+// ModifyDesiredUnit creates a builder that modifies an existing DesiredSystemdUnit.
+func ModifyDesiredUnit(unit *DesiredSystemdUnit) DesiredSystemdUnitBuilder {
+	return DesiredSystemdUnitBuilder{
+		unit: unit,
+	}
+}
+
+func (builder *DesiredSystemdUnitBuilder) validate() error {
+	// Check container data validity.
+	switch builder.unit.Type {
+	case TypeSimple:
+		if len(builder.unit.Container.Name) == 0 {
+			return errors.New("invalid empty container name")
+		}
+
+		fallthrough
+	case TypeOneShot:
+		if !strings.HasPrefix(builder.unit.Container.ImageName, "quay.io/smashwilson/az-") {
+			log.WithField("imageName", builder.unit.Container.ImageName).Warn("Attempt to create desired unit with invalid container image.")
+			return errors.New("invalid container image name")
+		}
+
+		if len(builder.unit.Container.ImageTag) == 0 {
+			return errors.New("invalid empty container image tag")
+		}
+	default:
+		if len(builder.unit.Container.Name) > 0 || len(builder.unit.Container.ImageTag) > 0 || len(builder.unit.Container.Name) > 0 {
+			return errors.New("attempt to specify container information for unit type that does not use one")
+		}
+	}
+
+	// Check schedule.
+	if builder.unit.Type == TypeTimer {
+		if len(builder.unit.Schedule) == 0 {
+			return errors.New("timer units must have a schedule")
+		}
+	} else {
+		if len(builder.unit.Schedule) > 0 {
+			return errors.New("non-timer units may not have a schedule")
+		}
+	}
+
+	return nil
+}
+
+// Path populates the path on disk to the unit file. Must be within the directory `/etc/systemd/system` and
+// begin with `az-`.
+func (builder *DesiredSystemdUnitBuilder) Path(path string) error {
+	path = filepath.Clean(path)
+	dirName, fileName := filepath.Split(path)
+
+	if dirName != "/etc/systemd/system/" {
+		log.WithField("path", path).Warn("Attempt to create desired unit file in invalid directory.")
+		return errors.New("attempt to create desired unit in invalid directory")
+	}
+
+	if !strings.HasPrefix(fileName, "az-") {
+		log.WithField("path", path).Warn("Attempt to create desired unit file with invalid prefix.")
+		return errors.New("Attempt to create desired unit with invalid filename")
+	}
+
+	builder.unit.Path = path
+	return nil
+}
+
+// Type populates the template type based on a human-friendly name. If the container has also been set, the type is
+// also used to assert the validity of the presence of container data.
+func (builder *DesiredSystemdUnitBuilder) Type(typeName string) error {
+	t, err := GetTypeWithName(typeName)
+	if err != nil {
+		return err
+	}
+	builder.unit.Type = t
+	return nil
+}
+
+// Container validates and populates information about the container used by this service. The container's image must
+// begin with `quay.io/smashwilson/az-`. If the type has already been set, it is used to validate whether or not
+// a container is expected to be set or not.
+func (builder *DesiredSystemdUnitBuilder) Container(imageName string, imageTag string, name string) error {
+	builder.unit.Container.ImageID = imageName
+	builder.unit.Container.ImageTag = imageTag
+	builder.unit.Container.Name = name
+	return nil
+}
+
+// Secrets populates the secrets requested by this unit.
+func (builder *DesiredSystemdUnitBuilder) Secrets(keys []string, session Session) error {
+	if err := session.ValidateSecretKeys(keys); err != nil {
+		return err
+	}
+
+	builder.unit.Secrets = keys
+	return nil
+}
+
+// Volumes validates and populates the volume mountings requested for the desired unit. Volumes must mount only host
+// paths beneath `/etc/ssl/az/`.
+func (builder *DesiredSystemdUnitBuilder) Volumes(volumes map[string]string) error {
+	var badVolumes []string
+	builder.unit.Volumes = make(map[string]string, len(volumes))
+	for hostPath, containerPath := range volumes {
+		normalizedHostPath := filepath.Clean(hostPath)
+		if !strings.HasPrefix(normalizedHostPath, "/etc/ssl/az/") {
+			badVolumes = append(badVolumes, hostPath)
+		} else {
+			builder.unit.Volumes[normalizedHostPath] = containerPath
+		}
+	}
+	if len(badVolumes) > 0 {
+		return fmt.Errorf("invalid host volumes: %s", strings.Join(badVolumes, ", "))
+	}
+	return nil
+}
+
+// Env populates the environment variable map given to the container or process.
+func (builder *DesiredSystemdUnitBuilder) Env(env map[string]string) error {
+	builder.unit.Env = env
+	return nil
+}
+
+// Ports populates the port map used to make container services available to the outside world.
+func (builder *DesiredSystemdUnitBuilder) Ports(ports map[int]int) error {
+	builder.unit.Ports = ports
+	return nil
+}
+
+// Schedule populates the frequency with with a timer unit will fire.
+func (builder *DesiredSystemdUnitBuilder) Schedule(schedule string) error {
+	builder.unit.Schedule = schedule
+	return nil
+}
+
+// Build performs final validation checks and, if successful, returns the constructed DesiredSystemdUnit.
+func (builder *DesiredSystemdUnitBuilder) Build() (*DesiredSystemdUnit, error) {
+	if err := builder.validate(); err != nil {
+		return nil, err
+	}
+	return builder.unit, nil
 }
