@@ -2,6 +2,7 @@ package cli
 
 import (
 	log "github.com/sirupsen/logrus"
+	"github.com/smashwilson/az-coordinator/state"
 	"github.com/smashwilson/az-coordinator/web"
 )
 
@@ -14,7 +15,7 @@ func serve() {
 	})
 
 	log.Info("Performing initial sync.")
-	delta, errs := r.session.Synchronize(nil)
+	delta, errs := r.session.Synchronize(state.SyncSettings{})
 	if len(errs) > 0 {
 		for _, err := range errs {
 			log.WithError(err).Warn("Synchronization error.")

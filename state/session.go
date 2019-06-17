@@ -113,11 +113,28 @@ func (s Session) ValidateSecretKeys(secretKeys []string) error {
 	return nil
 }
 
+// SyncSettings configures synchronization behavior.
+type SyncSettings struct {
+	Reporter ProgressReporter
+	UID      int
+	GID      int
+}
+
 // Synchronize brings local Docker images up to date, then reads desired and actual state, computes a
 // Delta between them, and applies it. The applied Delta is returned.
-func (s *Session) Synchronize(reporter ProgressReporter) (*Delta, []error) {
-	if reporter == nil {
-		reporter = LogProgressReporter{}
+func (s *Session) Synchronize(settings SyncSettings) (*Delta, []error) {
+	var reporter ProgressReporter = LogProgressReporter{}
+	if settings.Reporter != nil {
+		reporter = settings.Reporter
+	}
+
+	uid := -1
+	gid := -1
+	if settings.UID != 0 {
+		uid = settings.UID
+	}
+	if settings.GID != 0 {
+		gid = settings.GID
 	}
 
 	reporter.Report("Reading desired state.")
@@ -145,7 +162,7 @@ func (s *Session) Synchronize(reporter ProgressReporter) (*Delta, []error) {
 	reporter.Report("Computing delta.")
 	delta := s.Between(desired, actual)
 
-	if errs := delta.Apply(); len(errs) > 0 {
+	if errs := delta.Apply(uid, gid); len(errs) > 0 {
 		return nil, append(errs, errors.New("unable to apply delta"))
 	}
 

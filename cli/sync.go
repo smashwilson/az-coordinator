@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"os"
 
+	"github.com/smashwilson/az-coordinator/state"
+
 	log "github.com/sirupsen/logrus"
 )
 
 func sync() {
 	r := prepare(needs{session: true})
-	delta, errs := r.session.Synchronize(nil)
+	delta, errs := r.session.Synchronize(state.SyncSettings{})
 	if len(errs) > 0 {
 		for _, err := range errs {
 			log.WithError(err).Warn("Synchronization error.")

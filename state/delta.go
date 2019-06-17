@@ -158,7 +158,7 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 
 // Apply enacts the changes described by a Delta on the system. Individual operations that fail append errors to
 // the returned error slice, but do not prevent subsequent operations from being attempted.
-func (d Delta) Apply() []error {
+func (d Delta) Apply(uid, gid int) []error {
 	var (
 		errs         = make([]error, 0)
 		session      = d.session
@@ -169,17 +169,40 @@ func (d Delta) Apply() []error {
 	for filePath, fileContent := range d.fileContent {
 		dir := filepath.Dir(filePath)
 
-		if err := os.MkdirAll(dir, 0700); err != nil {
+		if err := os.MkdirAll(dir, 0750); err != nil {
 			errs = append(errs, err)
 			continue
+		}
+
+		if uid != -1 || gid != -1 {
+			if err := os.Chown(dir, uid, gid); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			log.WithFields(log.Fields{
+				"dirPath": dir,
+				"uid":     uid,
+				"gid":     gid,
+			}).Info("Directory ownership modified.")
 		}
 
 		if err := ioutil.WriteFile(filePath, fileContent, 0600); err != nil {
 			errs = append(errs, err)
 			continue
 		}
-
 		log.WithField("filePath", filePath).Info("File content written.")
+
+		if uid != -1 || gid != -1 {
+			if err := os.Chown(filePath, uid, gid); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			log.WithFields(log.Fields{
+				"filePath": filePath,
+				"uid":      uid,
+				"gid":      gid,
+			}).Info("File ownership modified.")
+		}
 	}
 
 	for _, unit := range d.UnitsToAdd {
@@ -197,6 +220,19 @@ func (d Delta) Apply() []error {
 			"unitName":     unit.UnitName(),
 			"unitFilePath": unit.Path,
 		}).Info("Unit file created.")
+
+		if uid != -1 || gid != -1 {
+			if err := os.Chown(unit.Path, uid, gid); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+
+			log.WithFields(log.Fields{
+				"unitFilePath": unit.Path,
+				"uid":          uid,
+				"gid":          gid,
+			}).Info("Unit file ownership modified.")
+		}
 	}
 
 	for _, unit := range d.UnitsToChange {
@@ -216,6 +252,19 @@ func (d Delta) Apply() []error {
 			"unitName":     unit.UnitName(),
 			"unitFilePath": unit.Path,
 		}).Info("Unit file modified.")
+
+		if uid != -1 || gid != -1 {
+			if err := os.Chown(unit.Path, uid, gid); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+
+			log.WithFields(log.Fields{
+				"unitFilePath": unit.Path,
+				"uid":          uid,
+				"gid":          gid,
+			}).Info("Unit file ownership modified.")
+		}
 	}
 
 	for _, unit := range d.UnitsToRestart {

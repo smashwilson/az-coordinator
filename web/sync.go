@@ -137,7 +137,7 @@ func (s *Server) performSync() {
 		return
 	}
 
-	delta, errs := session.Synchronize(reporter)
+	delta, errs := session.Synchronize(state.SyncSettings{Reporter: reporter})
 	if len(errs) > 0 {
 		for _, err := range errs {
 			log.WithError(err).Warn("Synchronization error.")
