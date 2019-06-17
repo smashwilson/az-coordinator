@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -44,82 +45,115 @@ const polkitConf = `polkit.addRule(function(action, subject) {
     }
 })`
 
-func ensureGroup(groupName string) {
-	if _, err := user.LookupGroup(groupName); err != nil {
-		if _, ok := err.(user.UnknownGroupError); ok {
-			if output, err := exec.Command("groupadd", groupName).CombinedOutput(); err != nil {
-				log.WithFields(log.Fields{
-					"err":       err,
-					"groupName": groupName,
-				}).Fatalf("Unable to create group.\n%s", output)
-			}
-		}
+var groupEntryRx = regexp.MustCompile(`\A[^:]+:[^:]+:(\d+)`)
 
+func getGroupID(groupName string) (bool, int) {
+	output, err := exec.Command("getent", "group", groupName).Output()
+	if err != nil {
 		log.WithFields(log.Fields{
 			"err":       err,
 			"groupName": groupName,
-		}).Fatalf("Unable to search for existing group.")
+		}).Fatalf("Unable to query for existing group:\n%s", output)
 	}
 
-	log.WithField("groupName", groupName).Debug("Group already exists.")
+	if len(output) == 0 {
+		return false, 0
+	}
+
+	m := groupEntryRx.FindSubmatch(output)
+	if len(m) != 2 {
+		log.WithFields(log.Fields{
+			"err":       err,
+			"groupName": groupName,
+		}).Fatalf("Unable to interpret getent output:\n%s", output)
+	}
+	gid64, err := strconv.ParseInt(string(m[1]), 10, 32)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err,
+			"gid": string(m[1]),
+		}).Fatalf("Unable to parse gid as an integer.")
+	}
+	return true, int(gid64)
 }
 
-func ensureUser(userName string, groupNames ...string) {
-	existing, err := user.Lookup(userName)
-	if err != nil {
-		if _, ok := err.(user.UnknownUserError); ok {
-			args := []string{"--user-group", "--no-create-home", "--shell=/bin/false"}
-			if len(groupNames) > 0 {
-				args = append(args, fmt.Sprintf("-G%s", strings.Join(groupNames, ",")))
-			}
-			args = append(args, userName)
-
-			if output, err := exec.Command("useradd", args...).CombinedOutput(); err != nil {
-				log.WithFields(log.Fields{
-					"err":      err,
-					"userName": userName,
-				}).Fatalf("Unable to create user.\n%s", output)
-			}
-		} else {
-			log.WithFields(log.Fields{
-				"err":      err,
-				"userName": userName,
-			}).Fatalf("Unable to search for existing user.")
-		}
-	} else {
-		log.WithField("userName", userName).Debug("User already exists.")
-	}
-
-	expectedGids := make(map[string]bool, len(groupNames))
-	for _, groupName := range groupNames {
-		g, err := user.LookupGroup(groupName)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"err":       err,
-				"groupName": groupName,
-			}).Fatal("Unable to locate existing group.")
-		}
-
-		expectedGids[g.Gid] = true
-	}
-
-	actualGids, err := existing.GroupIds()
+func getUserGroups(userName string) (bool, []string) {
+	output, err := exec.Command("id", "-Gn", userName).Output()
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err":      err,
 			"userName": userName,
-		}).Fatal("Unable to enumerate groups that user belongs to.")
+		}).Fatalf("Unable to locate existing user:\n%s", output)
+	}
+
+	if len(output) == 0 {
+		return false, nil
+	}
+
+	return true, strings.Split(string(output), " ")
+}
+
+func ensureGroup(groupName string) int {
+	if exists, gid := getGroupID(groupName); exists {
+		log.WithFields(log.Fields{
+			"groupName": groupName,
+			"groupID":   gid,
+		}).Debug("Group already exists.")
+		return gid
+	}
+
+	if output, err := exec.Command("groupadd", groupName).CombinedOutput(); err != nil {
+		log.WithFields(log.Fields{
+			"err":       err,
+			"groupName": groupName,
+		}).Fatalf("Unable to create group.\n%s", output)
+	}
+
+	exists, gid := getGroupID(groupName)
+	if !exists {
+		log.WithField("groupName", groupName).Fatal("Group does not exist after creation.")
+	}
+	return gid
+}
+
+func ensureUser(userName string, groupNames ...string) {
+	exists, actualGroupNames := getUserGroups(userName)
+	if !exists {
+		args := []string{"--user-group", "--no-create-home", "--shell=/bin/false"}
+		if len(groupNames) > 0 {
+			args = append(args, fmt.Sprintf("-G%s", strings.Join(groupNames, ",")))
+		}
+		args = append(args, userName)
+
+		if output, err := exec.Command("useradd", args...).CombinedOutput(); err != nil {
+			log.WithFields(log.Fields{
+				"err":      err,
+				"userName": userName,
+			}).Fatalf("Unable to create user.\n%s", output)
+		}
+
+		log.WithFields(log.Fields{
+			"userName":   userName,
+			"groupNames": groupNames,
+		}).Debug("User created.")
+
+		return
+	}
+
+	expectedGroupNames := make(map[string]bool, len(groupNames))
+	for _, expectedGroupName := range groupNames {
+		expectedGroupNames[expectedGroupName] = true
 	}
 
 	hasMissing := false
-	for _, actualGid := range actualGids {
-		if _, ok := expectedGids[actualGid]; ok {
-			delete(expectedGids, actualGid)
+	for _, actualGroupName := range actualGroupNames {
+		if _, ok := expectedGroupNames[actualGroupName]; ok {
+			delete(expectedGroupNames, actualGroupName)
 		} else {
 			hasMissing = true
 		}
 	}
-	hasExtra := len(expectedGids) > 0
+	hasExtra := len(expectedGroupNames) > 0
 
 	if hasMissing || hasExtra {
 		gArg := fmt.Sprintf("-G%s", strings.Join(groupNames, ","))
@@ -213,10 +247,8 @@ func initialize() {
 		log.WithError(err).Error("Unable to create secrets table.")
 	}
 
-	ensureGroup("azinfra")
-	ensureUser("coordinator", "az-infra")
-
-	gid := getGid("azinfra")
+	gid := ensureGroup("azinfra")
+	ensureUser("coordinator", "azinfra")
 
 	ensureDirectory(filepath.Dir(config.DefaultOptionsPath), gid)
 	ensureDirectory("/etc/ssl/az", gid)
@@ -225,10 +257,12 @@ func initialize() {
 	if err := ioutil.WriteFile("/etc/dbus-1/system.d/az-coordinator.conf", []byte(dbusConf), 0644); err != nil {
 		log.WithError(err).Error("Unable to write DBus configuration file.")
 	}
+	log.Debug("DBus permissions modified.")
 
 	if err := ioutil.WriteFile("/etc/polkit-1/rules.d/00-coordinator.conf", []byte(polkitConf), 0644); err != nil {
 		log.WithError(err).Error("Unable to write polkit configuration file.")
 	}
+	log.Debug("Polkit permissions modified.")
 
 	if r.options.OptionsPath != config.DefaultOptionsPath {
 		if err := os.Rename(r.options.OptionsPath, config.DefaultOptionsPath); err != nil {
