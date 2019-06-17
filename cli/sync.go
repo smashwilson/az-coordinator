@@ -9,7 +9,7 @@ import (
 
 func sync() {
 	r := prepare(needs{session: true})
-	delta, errs := r.session.Synchronize()
+	delta, errs := r.session.Synchronize(nil)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			log.WithError(err).Warn("Synchronization error.")
