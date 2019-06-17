@@ -20,6 +20,7 @@ func serve() {
 		for _, err := range errs {
 			log.WithError(err).Warn("Synchronization error.")
 		}
+		log.WithField("errorCount", len(errs)).Fatal("Unable to synchronize.")
 	} else {
 		log.WithField("delta", delta).Debug("Delta applied.")
 	}
