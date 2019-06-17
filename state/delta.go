@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
@@ -325,4 +326,41 @@ func (d Delta) Apply() []error {
 	}
 
 	return errs
+}
+
+func (d Delta) String() string {
+	b := strings.Builder{}
+
+	writeDesiredUnit := func(u DesiredSystemdUnit) {
+		b.WriteString(u.Path)
+		if len(u.Container.ImageName) > 0 && len(u.Container.ImageTag) > 0 {
+			fmt.Fprintf(&b, " container=(%s:%s)", u.Container.ImageName, u.Container.ImageTag)
+		}
+		b.WriteString("\n")
+	}
+
+	writeActualUnit := func(u ActualSystemdUnit) {
+		fmt.Fprintf(&b, "%s name=%s contentlen=%d\n", u.Path, u.Name, len(u.Content))
+	}
+
+	for _, u := range d.UnitsToAdd {
+		b.WriteString("add unit: ")
+		writeDesiredUnit(u)
+	}
+
+	for _, u := range d.UnitsToChange {
+		b.WriteString("change unit: ")
+		writeDesiredUnit(u)
+	}
+
+	for _, u := range d.UnitsToRemove {
+		b.WriteString("remove unit: ")
+		writeActualUnit(u)
+	}
+
+	for _, f := range d.FilesToWrite {
+		fmt.Fprintf(&b, "write file: %s contentlen=%d\n", f, len(d.fileContent[f]))
+	}
+
+	return b.String()
 }

@@ -13,6 +13,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/smashwilson/az-coordinator/config"
+	"github.com/smashwilson/az-coordinator/secrets"
+	"github.com/smashwilson/az-coordinator/state"
 )
 
 const dbusConf = `<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
@@ -292,6 +294,27 @@ func initialize() {
 			"defaultOptionsPath": config.DefaultOptionsPath,
 		}).Fatal("Unable to modify options file permissions.")
 	}
+
+	log.WithField("keyID", r.options.MasterKeyID).Info("Creating decoder ring.")
+	ring, err := secrets.NewDecoderRing(r.options.MasterKeyID, r.options.AWSRegion)
+	if err != nil {
+		log.WithError(err).Fatal("Unable to create decoder ring.")
+	}
+
+	log.Info("Establishing session.")
+	session, err := state.NewSession(r.db, ring, r.options.DockerAPIVersion)
+	if err != nil {
+		log.WithError(err).Fatal("Unable to create session.")
+	}
+
+	delta, errs := session.Synchronize(nil)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			log.WithError(err).Warn("Error encountered during synchronization.")
+		}
+		log.WithField("errorCount", len(errs)).Fatal("Unable to perform initial synchronization.")
+	}
+	log.Debugf("Synchronization complete.\n%s", delta)
 
 	log.Info("Initialization complete.")
 }
