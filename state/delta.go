@@ -389,7 +389,7 @@ func (d Delta) String() string {
 	}
 
 	writeActualUnit := func(u ActualSystemdUnit) {
-		fmt.Fprintf(&b, "%s name=%s contentlen=%d\n", u.Path, u.Name, len(u.Content))
+		fmt.Fprintf(&b, "%s contentlen=%d\n", u.Path, len(u.Content))
 	}
 
 	for _, u := range d.UnitsToAdd {

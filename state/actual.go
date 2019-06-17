@@ -18,14 +18,11 @@ type ActualState struct {
 
 // ActualSystemdUnit is information about a SystemD unit that is currently loaded on this host.
 type ActualSystemdUnit struct {
-	// Name is the name of the unit as it's known to SystemD, like "docker.service".
-	Name string `json:"name"`
-
 	// Path is the path to the source of this unit on disk.
 	Path string `json:"path"`
 
 	// Content is the current content of the unit file on disk.
-	Content []byte `json:"content"`
+	Content []byte `json:"-"`
 }
 
 // ReadActualState introspects SystemD and the filesystem to construct an ActualState instance that captures a
@@ -36,10 +33,7 @@ func (session Session) ReadActualState() (*ActualState, error) {
 		secrets = session.secrets
 	)
 
-	listedUnits, err := conn.ListUnitFilesByPatterns(
-		[]string{"inactive", "deactivating", "failed", "error", "active", "reloading", "activating"},
-		[]string{"az-*"},
-	)
+	listedUnits, err := conn.ListUnitFilesByPatterns(nil, []string{"az*"})
 	if err != nil {
 		return nil, err
 	}
