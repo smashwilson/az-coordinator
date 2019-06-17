@@ -308,7 +308,7 @@ func initialize() {
 	}
 	log.Debug("DBus permissions modified.")
 
-	if err := ioutil.WriteFile("/etc/polkit-1/rules.d/00-coordinator.conf", []byte(polkitConf), 0644); err != nil {
+	if err := ioutil.WriteFile("/etc/polkit-1/rules.d/00-coordinator.rules", []byte(polkitConf), 0644); err != nil {
 		log.WithError(err).Error("Unable to write polkit configuration file.")
 	}
 	log.Debug("Polkit permissions modified.")
