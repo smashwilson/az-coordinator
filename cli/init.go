@@ -95,6 +95,33 @@ func getUserGroups(userName string) (bool, []string) {
 	return true, strings.Split(string(output), " ")
 }
 
+func getUserID(userName string) (bool, int) {
+	output, err := exec.Command("id", "-u", userName).Output()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err":      err,
+			"userName": userName,
+		}).Fatalf("Unable to locate existing user:\n%s", output)
+	}
+
+	trimmed := strings.TrimSpace(string(output))
+
+	if len(trimmed) == 0 {
+		return false, 0
+	}
+
+	uid64, err := strconv.ParseInt(trimmed, 10, 32)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err":      err,
+			"userName": userName,
+			"output":   trimmed,
+		}).Fatalf("Unable to convert uid to integer.")
+	}
+
+	return true, int(uid64)
+}
+
 func ensureGroup(groupName string) int {
 	if exists, gid := getGroupID(groupName); exists {
 		log.WithFields(log.Fields{
@@ -118,7 +145,7 @@ func ensureGroup(groupName string) int {
 	return gid
 }
 
-func ensureUser(userName string, groupNames ...string) {
+func ensureUser(userName string, groupNames ...string) int {
 	exists, actualGroupNames := getUserGroups(userName)
 	if !exists {
 		args := []string{"--user-group", "--no-create-home", "--shell=/bin/false"}
@@ -139,7 +166,16 @@ func ensureUser(userName string, groupNames ...string) {
 			"groupNames": groupNames,
 		}).Debug("User created.")
 
-		return
+		now, uid := getUserID(userName)
+		if !now {
+			log.WithField("userName", userName).Fatal("User does not exist immediately after creation.")
+		}
+		log.WithFields(log.Fields{
+			"userName": userName,
+			"userID":   uid,
+		}).Debug("User ID located.")
+
+		return uid
 	}
 
 	expectedGroupNames := make(map[string]bool, len(groupNames))
@@ -177,6 +213,17 @@ func ensureUser(userName string, groupNames ...string) {
 			"groupNames": groupNames,
 		}).Debug("Existing user has correct groups.")
 	}
+
+	now, uid := getUserID(userName)
+	if !now {
+		log.WithField("userName", userName).Fatal("User does not exist immediately after creation.")
+	}
+	log.WithFields(log.Fields{
+		"userName": userName,
+		"userID":   uid,
+	}).Debug("User ID located.")
+
+	return uid
 }
 
 func ensureDirectory(dirName string, gid int) {
@@ -249,12 +296,12 @@ func initialize() {
 		log.WithError(err).Error("Unable to create secrets table.")
 	}
 
-	gid := ensureGroup("azinfra")
-	ensureUser("coordinator", "azinfra")
+	azinfraGID := ensureGroup("azinfra")
+	coordinatorUID := ensureUser("coordinator", "azinfra", "docker")
 
-	ensureDirectory(filepath.Dir(config.DefaultOptionsPath), gid)
-	ensureDirectory("/etc/ssl/az", gid)
-	ensureDirectory("/etc/systemd/system", gid)
+	ensureDirectory(filepath.Dir(config.DefaultOptionsPath), azinfraGID)
+	ensureDirectory("/etc/ssl/az", azinfraGID)
+	ensureDirectory("/etc/systemd/system", azinfraGID)
 
 	if err := ioutil.WriteFile("/etc/dbus-1/system.d/az-coordinator.conf", []byte(dbusConf), 0644); err != nil {
 		log.WithError(err).Error("Unable to write DBus configuration file.")
@@ -280,11 +327,11 @@ func initialize() {
 		}).Debug("Options path is already in the correct location.")
 	}
 
-	if err := os.Chown(config.DefaultOptionsPath, -1, gid); err != nil {
+	if err := os.Chown(config.DefaultOptionsPath, -1, azinfraGID); err != nil {
 		log.WithFields(log.Fields{
 			"err":                err,
 			"defaultOptionsPath": config.DefaultOptionsPath,
-			"gid":                gid,
+			"gid":                azinfraGID,
 		}).Fatal("Unable to modify options file ownership.")
 	}
 
@@ -307,7 +354,7 @@ func initialize() {
 		log.WithError(err).Fatal("Unable to create session.")
 	}
 
-	delta, errs := session.Synchronize(nil)
+	delta, errs := session.Synchronize(state.SyncSettings{UID: coordinatorUID, GID: azinfraGID})
 	if len(errs) > 0 {
 		for _, err := range errs {
 			log.WithError(err).Warn("Error encountered during synchronization.")
