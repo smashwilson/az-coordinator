@@ -24,9 +24,10 @@ type Server struct {
 // NewServer creates (but does not start) an HTTP server for the coordinator management interface.
 func NewServer(opts *config.Options, db *sql.DB, ring *secrets.DecoderRing) Server {
 	s := Server{
-		opts: opts,
-		db:   db,
-		ring: ring,
+		opts:        opts,
+		db:          db,
+		ring:        ring,
+		currentSync: &syncProgress{},
 	}
 
 	http.HandleFunc("/", s.handleRoot)
