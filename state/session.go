@@ -74,7 +74,10 @@ func (s Session) PullAllImages(state DesiredState) []error {
 		go s.pullImage(ref, results)
 	}
 	for i := 0; i < len(imageRefs); i++ {
-		errs = append(errs, <-results)
+		err := <-results
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 	log.WithField("count", len(imageRefs)).Debug("Docker pulls complete.")
 
