@@ -23,13 +23,14 @@ const (
 )
 
 type resolvedSystemdUnit struct {
-	U     DesiredSystemdUnit
-	Env   map[string]string
-	Argv0 string
+	U        DesiredSystemdUnit
+	UnitName string
+	Env      map[string]string
+	Argv0    string
 }
 
 const simpleSource = `[Unit]
-Description={{ .Description }}
+Description={{ .UnitName }}
 After=docker.service
 Requires=docker.service
 
@@ -58,7 +59,7 @@ WantedBy=multi-user.target
 var simpleTemplate = template.Must(template.New("simple").Parse(simpleSource))
 
 const oneShotSource = `[Unit]
-Description={{ .U.Description }}
+Description={{ .UnitName }}
 Requires=docker.service
 
 [Service]
@@ -80,7 +81,7 @@ ExecStart=/usr/bin/docker run --rm \
 var oneShotTemplate = template.Must(template.New("one-shot").Parse(oneShotSource))
 
 const timerSource = `[Unit]
-Description={{ .U.Description }}
+Description={{ .UnitName }}
 
 [Timer]
 OnCalendar={{ .U.Schedule }}
@@ -92,7 +93,7 @@ WantedBy=timers.target
 var timerTemplate = template.Must(template.New("timer").Parse(timerSource))
 
 const selfSource = `[Unit]
-Description=Oops, I Wrote A Container Orchestrator
+Description=az-coordinator
 After=docker.service
 Wants=docker.service
 
@@ -156,10 +157,16 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 		return nil, errs
 	}
 
+	unitName := unit.UnitName()
+	if len(unit.Container.Name) != 0 {
+		unitName = unit.Container.Name
+	}
+
 	return &resolvedSystemdUnit{
-		U:     unit,
-		Env:   fullEnv,
-		Argv0: argv0,
+		U:        unit,
+		UnitName: unitName,
+		Env:      fullEnv,
+		Argv0:    argv0,
 	}, errs
 }
 
