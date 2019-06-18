@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/smashwilson/az-coordinator/state"
 
@@ -34,9 +35,9 @@ func NewServer(opts *config.Options, db *sql.DB, ring *secrets.DecoderRing) Serv
 	http.HandleFunc("/secrets", s.protected(s.handleSecretsRoot))
 	http.HandleFunc("/desired", s.protected(s.handleDesiredRoot))
 	http.HandleFunc("/desired/", s.protected(s.handleDesired))
-	http.HandleFunc("/actual", s.protected(s.handleListActual))
-	http.HandleFunc("/diff", s.protected(s.handleDiff))
-	http.HandleFunc("/sync", s.protected(s.handleSync))
+	http.HandleFunc("/actual", s.protected(s.handleActualRoot))
+	http.HandleFunc("/diff", s.protected(s.handleDiffRoot))
+	http.HandleFunc("/sync", s.protected(s.handleSyncRoot))
 
 	return s
 }
@@ -57,6 +58,43 @@ func (s Server) protected(handler func(http.ResponseWriter, *http.Request)) func
 
 		handler(w, r)
 	}
+}
+
+type methodHandlerMap map[string]func()
+
+func (s Server) cors(w http.ResponseWriter, r *http.Request, handlers methodHandlerMap) {
+	w.Header().Set("Access-Control-Allow-Origin", s.opts.AllowedOrigin)
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+	if r.Method == http.MethodOptions {
+		allowedMethods := make([]string, 0, len(handlers)+1)
+		allowedMethods = append(allowedMethods, "OPTIONS")
+		for method := range handlers {
+			allowedMethods = append(allowedMethods, method)
+		}
+		w.Header().Set("Access-Control-Allow-Methods", strings.Join(allowedMethods, ", "))
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		w.Header().Set("Access-Control-Max-Age", "60")
+
+		proposedMethod := r.Header.Get("Access-Control-Request-Method")
+		if _, ok := handlers[proposedMethod]; !ok {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Invalid method requested in CORS preflight request."))
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	handler, ok := handlers[r.Method]
+	if !ok {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		w.Write([]byte("Method not allowed"))
+		return
+	}
+
+	handler()
 }
 
 func (s Server) newSession() (*state.Session, error) {

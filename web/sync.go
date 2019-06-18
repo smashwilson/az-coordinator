@@ -149,16 +149,11 @@ func (s *Server) performSync() {
 	s.currentSync.setDelta(delta)
 }
 
-func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		s.handleGetSync(w, r)
-	case http.MethodPost:
-		s.handleCreateSync(w, r)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Write([]byte("Method not allowed"))
-	}
+func (s *Server) handleSyncRoot(w http.ResponseWriter, r *http.Request) {
+	s.cors(w, r, methodHandlerMap{
+		http.MethodGet:  func() { s.handleGetSync(w, r) },
+		http.MethodPost: func() { s.handleCreateSync(w, r) },
+	})
 }
 
 func (s *Server) handleGetSync(w http.ResponseWriter, r *http.Request) {

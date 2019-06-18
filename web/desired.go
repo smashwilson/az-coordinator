@@ -13,15 +13,10 @@ import (
 )
 
 func (s Server) handleDesiredRoot(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		s.handleListDesired(w, r)
-	case http.MethodPost:
-		s.handleCreateDesired(w, r)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Write([]byte("Method not allowed"))
-	}
+	s.cors(w, r, methodHandlerMap{
+		http.MethodGet:  func() { s.handleListDesired(w, r) },
+		http.MethodPost: func() { s.handleCreateDesired(w, r) },
+	})
 }
 
 var desiredRx = regexp.MustCompile(`^/desired/(\d+)$`)
@@ -39,15 +34,10 @@ func (s Server) handleDesired(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch r.Method {
-	case http.MethodPut:
-		s.handleUpdateDesired(w, r, int(id))
-	case http.MethodDelete:
-		s.handleDeleteDesired(w, r, int(id))
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Write([]byte("Method not allowed"))
-	}
+	s.cors(w, r, methodHandlerMap{
+		http.MethodPut:    func() { s.handleUpdateDesired(w, r, int(id)) },
+		http.MethodDelete: func() { s.handleDeleteDesired(w, r, int(id)) },
+	})
 }
 
 func (s Server) handleListDesired(w http.ResponseWriter, r *http.Request) {

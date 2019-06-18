@@ -18,6 +18,7 @@ type Options struct {
 	MasterKeyID      string `json:"master_key_id"`
 	AWSRegion        string `json:"aws_region"`
 	DockerAPIVersion string `json:"docker_api_version"`
+	AllowedOrigin    string `json:"allowed_origin"`
 
 	OptionsPath string `json:"-"`
 }

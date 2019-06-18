@@ -9,17 +9,11 @@ import (
 )
 
 func (s *Server) handleSecretsRoot(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		s.handleListSecrets(w, r)
-	case http.MethodPost:
-		s.handleCreateSecrets(w, r)
-	case http.MethodDelete:
-		s.handleDeleteSecrets(w, r)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Write([]byte("Method not allowed"))
-	}
+	s.cors(w, r, methodHandlerMap{
+		http.MethodGet:    func() { s.handleListSecrets(w, r) },
+		http.MethodPost:   func() { s.handleCreateSecrets(w, r) },
+		http.MethodDelete: func() { s.handleDeleteSecrets(w, r) },
+	})
 }
 
 func (s *Server) handleListSecrets(w http.ResponseWriter, r *http.Request) {

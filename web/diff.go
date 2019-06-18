@@ -9,7 +9,13 @@ import (
 	"github.com/smashwilson/az-coordinator/state"
 )
 
-func (s Server) handleDiff(w http.ResponseWriter, r *http.Request) {
+func (s Server) handleDiffRoot(w http.ResponseWriter, r *http.Request) {
+	s.cors(w, r, methodHandlerMap{
+		http.MethodGet: func() { s.handleGetDiff(w, r) },
+	})
+}
+
+func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
 	session, err := state.NewSession(s.db, s.ring, s.opts.DockerAPIVersion)
 	if err != nil {
 		log.WithError(err).Error("Unable to establish a session.")

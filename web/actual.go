@@ -8,6 +8,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+func (s Server) handleActualRoot(w http.ResponseWriter, r *http.Request) {
+	s.cors(w, r, methodHandlerMap{
+		http.MethodGet: func() { s.handleListActual(w, r) },
+	})
+}
+
 func (s Server) handleListActual(w http.ResponseWriter, r *http.Request) {
 	session, err := s.newSession()
 	if err != nil {
