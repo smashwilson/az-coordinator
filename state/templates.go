@@ -137,7 +137,7 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 	errs := make([]error, 0)
 
 	for k, v := range unit.Env {
-		fullEnv[k] = strings.ReplaceAll(v, "\n", "\\n\\")
+		fullEnv[k] = strings.ReplaceAll(v, "\n", "\\n\\\n")
 	}
 
 	for _, k := range unit.Secrets {
@@ -146,7 +146,7 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 			errs = append(errs, err)
 			continue
 		}
-		fullEnv[k] = strings.ReplaceAll(v, "\n", "\\n\\")
+		fullEnv[k] = strings.ReplaceAll(v, "\n", "\\n\\\n")
 	}
 
 	argv0, err := exec.LookPath(os.Args[0])
