@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"text/template"
 )
 
@@ -40,15 +41,15 @@ ExecStartPre=-/usr/bin/docker rm {{ .U.Container.Name }}
 ExecStart=/usr/bin/docker run \
   --read-only \
   --network local \
-{{ range $key, $value := .Env }}
+{{- range $key, $value := .Env }}
   --env {{ $key }}="{{ $value }}" \
-{{ end }}
-{{ range $hostPath, $containerPath := .U.Volumes }}
+{{- end }}
+{{- range $hostPath, $containerPath := .U.Volumes }}
   --volume {{ $hostPath }}:{{ $containerPath }}:ro \
-{{ end }}
-{{ range $localPort, $externalPort := .U.Ports }}
+{{- end }}
+{{- range $localPort, $externalPort := .U.Ports }}
   --publish {{ $localPort }}:{{ $externalPort }} \
-{{ end }}
+{{- end }}
   --name {{ .U.Container.Name }} \
   {{ .U.Container.ImageName }}:{{ .U.Container.ImageTag }}
 
@@ -66,15 +67,15 @@ Requires=docker.service
 Type=oneshot
 ExecStart=/usr/bin/docker run --rm \
   --read-only \
-{{ range $key, $value := .Env }}
+{{- range $key, $value := .Env }}
   --env {{ $key }}="{{ $value }}" \
-{{ end }}
-{{ range $hostPath, $containerPath := .U.Volumes }}
+{{- end }}
+{{- range $hostPath, $containerPath := .U.Volumes }}
   --volume {{ $hostPath }}:{{ $containerPath }}:ro \
-{{ end }}
-{{ range $localPort, $externalPort := .U.Ports }}
+{{- end }}
+{{- range $localPort, $externalPort := .U.Ports }}
   --publish {{ $localPort }}:{{ $externalPort }} \
-{{ end }}
+{{- end }}
   {{ .U.Container.ImageName }}:{{ .U.Container.ImageTag }}
 `
 
@@ -99,9 +100,9 @@ Wants=docker.service
 
 [Service]
 User=coordinator
-{{ range $key, $value := .Env }}
+{{- range $key, $value := .Env }}
 Environment="{{ $key }}={{ $value }}"
-{{ end }}
+{{- end }}
 ExecStart={{ .Argv0 }} serve
 
 [Install]
@@ -136,7 +137,7 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 	errs := make([]error, 0)
 
 	for k, v := range unit.Env {
-		fullEnv[k] = v
+		fullEnv[k] = strings.ReplaceAll(v, "\n", "\\n\\")
 	}
 
 	for _, k := range unit.Secrets {
@@ -145,7 +146,7 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 			errs = append(errs, err)
 			continue
 		}
-		fullEnv[k] = v
+		fullEnv[k] = strings.ReplaceAll(v, "\n", "\\n\\")
 	}
 
 	argv0, err := exec.LookPath(os.Args[0])
