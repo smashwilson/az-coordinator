@@ -355,7 +355,7 @@ func (builder *DesiredSystemdUnitBuilder) Type(typeName string) error {
 // begin with `quay.io/smashwilson/az-`. If the type has already been set, it is used to validate whether or not
 // a container is expected to be set or not.
 func (builder *DesiredSystemdUnitBuilder) Container(imageName string, imageTag string, name string) error {
-	builder.unit.Container.ImageID = imageName
+	builder.unit.Container.ImageName = imageName
 	builder.unit.Container.ImageTag = imageTag
 	builder.unit.Container.Name = name
 	return nil
