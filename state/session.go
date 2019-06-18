@@ -18,6 +18,7 @@ import (
 // Session centralizes all of the resources necessary for a single request or operation.
 type Session struct {
 	db      *sql.DB
+	ring    *secrets.DecoderRing
 	cli     *client.Client
 	conn    *dbus.Conn
 	secrets *secrets.Bag
@@ -45,6 +46,7 @@ func NewSession(db *sql.DB, ring *secrets.DecoderRing, dockerAPIVersion string) 
 
 	return &Session{
 		db:      db,
+		ring:    ring,
 		cli:     cli,
 		conn:    conn,
 		secrets: secrets,
@@ -111,6 +113,39 @@ func (s Session) ValidateSecretKeys(secretKeys []string) error {
 		return fmt.Errorf("Unrecognized secret keys: %s", strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+// ListSecretKeys enumerates the known secret keys.
+func (s Session) ListSecretKeys() []string {
+	return s.secrets.Keys()
+}
+
+// SetSecrets adds or updates the values associated with many secrets at once, then persists
+// them to the database.
+func (s Session) SetSecrets(secrets map[string]string) error {
+	if len(secrets) == 0 {
+		return nil
+	}
+
+	for key, value := range secrets {
+		s.secrets.Set(key, value)
+	}
+
+	return s.secrets.SaveToDatabase(s.db, s.ring, false)
+}
+
+// DeleteSecrets removes the values associated with many secret keys, then persists the changed
+// bag to the database.
+func (s Session) DeleteSecrets(keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	for _, key := range keys {
+		s.secrets.Delete(key)
+	}
+
+	return s.secrets.SaveToDatabase(s.db, s.ring, true)
 }
 
 // SyncSettings configures synchronization behavior.

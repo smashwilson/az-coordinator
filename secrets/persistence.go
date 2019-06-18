@@ -64,13 +64,18 @@ func LoadFromDatabase(db *sql.DB, ring *DecoderRing) (*Bag, error) {
 }
 
 // Len returns the number of known secrets.
-func (bag *Bag) Len() int {
+func (bag Bag) Len() int {
 	return len(bag.secrets)
 }
 
 // Set adds a new secret to the bag or overwrites an existing secret with a new value.
 func (bag *Bag) Set(key string, value string) {
 	bag.secrets[key] = value
+}
+
+// Delete removes a key from the secrets bag.
+func (bag *Bag) Delete(key string) {
+	delete(bag.secrets, key)
 }
 
 // Get retrieves an existing secret by key, returning a default value if no secret with this key
@@ -95,6 +100,15 @@ func (bag Bag) GetRequired(key string) (string, error) {
 func (bag Bag) Has(key string) bool {
 	_, ok := bag.secrets[key]
 	return ok
+}
+
+// Keys returns a slice containing all known secret keys.
+func (bag Bag) Keys() []string {
+	ks := make([]string, 0, len(bag.secrets))
+	for key := range bag.secrets {
+		ks = append(ks, key)
+	}
+	return ks
 }
 
 // DesiredTLSFiles constructs a map whose keys are paths on the filesystem and whose values are the contents

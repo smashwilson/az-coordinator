@@ -31,7 +31,9 @@ func NewServer(opts *config.Options, db *sql.DB, ring *secrets.DecoderRing) Serv
 	}
 
 	http.HandleFunc("/", s.handleRoot)
+	http.HandleFunc("/secrets", s.protected(s.handleSecretsRoot))
 	http.HandleFunc("/desired", s.protected(s.handleDesiredRoot))
+	http.HandleFunc("/desired/", s.protected(s.handleDesired))
 	http.HandleFunc("/actual", s.protected(s.handleListActual))
 	http.HandleFunc("/diff", s.protected(s.handleDiff))
 	http.HandleFunc("/sync", s.protected(s.handleSync))
