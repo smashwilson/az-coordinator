@@ -162,9 +162,10 @@ func (state *DesiredState) ReadImages(session *Session) error {
 func (session Session) UndesireUnit(id int) error {
 	var db = session.db
 
-	return db.QueryRow(`
+	_, err := db.Exec(`
 		DELETE FROM state_systemd_units WHERE id = $1
-	`, id).Scan()
+	`, id)
+	return err
 }
 
 // MakeDesired persists its caller within the database. Future calls to ReadDesiredState will include this unit
@@ -242,7 +243,7 @@ func (unit DesiredSystemdUnit) Update(session Session) error {
 		return err
 	}
 
-	return db.QueryRow(`
+	_, err = db.Exec(`
 	UPDATE state_systemd_units
 	SET
 		path = $1, type = $2,
@@ -255,7 +256,9 @@ func (unit DesiredSystemdUnit) Update(session Session) error {
 		unit.Container.Name, unit.Container.ImageName, unit.Container.ImageTag,
 		rawSecrets, rawEnv, rawPorts, rawVolumes,
 		unit.Schedule,
-	).Scan()
+		unit.ID,
+	)
+	return err
 }
 
 // UnitName derives the SystemD logical unit name from the path of its source on disk.
