@@ -52,6 +52,16 @@ var groupEntryRx = regexp.MustCompile(`\A[^:]+:[^:]+:(\d+)`)
 func getGroupID(groupName string) (bool, int) {
 	output, err := exec.Command("getent", "group", groupName).Output()
 	if err != nil {
+		if e, ok := err.(*exec.ExitError); ok {
+			log.WithFields(log.Fields{
+				"err":       e,
+				"groupName": groupName,
+				"exitCode":  e.ExitCode,
+				"stderr":    string(e.Stderr),
+			}).Debug("Group not found.")
+			return false, 0
+		}
+
 		log.WithFields(log.Fields{
 			"err":       err,
 			"groupName": groupName,
@@ -82,6 +92,16 @@ func getGroupID(groupName string) (bool, int) {
 func getUserGroups(userName string) (bool, []string) {
 	output, err := exec.Command("id", "-Gn", userName).Output()
 	if err != nil {
+		if e, ok := err.(*exec.ExitError); ok {
+			log.WithFields(log.Fields{
+				"err":      e,
+				"userName": userName,
+				"exitCode": e.ExitCode,
+				"stderr":   string(e.Stderr),
+			}).Debug("User not found.")
+			return false, nil
+		}
+
 		log.WithFields(log.Fields{
 			"err":      err,
 			"userName": userName,
@@ -98,6 +118,16 @@ func getUserGroups(userName string) (bool, []string) {
 func getUserID(userName string) (bool, int) {
 	output, err := exec.Command("id", "-u", userName).Output()
 	if err != nil {
+		if e, ok := err.(*exec.ExitError); ok {
+			log.WithFields(log.Fields{
+				"err":      e,
+				"userName": userName,
+				"exitCode": e.ExitCode,
+				"stderr":   string(e.Stderr),
+			}).Debug("User not found.")
+			return false, 0
+		}
+
 		log.WithFields(log.Fields{
 			"err":      err,
 			"userName": userName,
