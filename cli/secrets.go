@@ -45,7 +45,7 @@ func setSecrets() {
 		bag.Set(k, v)
 	}
 
-	if err = bag.SaveToDatabase(r.db, ring); err != nil {
+	if err = bag.SaveToDatabase(r.db, ring, true); err != nil {
 		log.WithError(err).Fatal("Unable to encrypt and save new secrets.")
 	}
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"regexp"
 
 	"github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
@@ -28,27 +27,27 @@ var tlsKeysToPath = map[string]string{
 	"TLS_DH_PARAMS":   FilenameDHParams,
 }
 
-type SecretsBag struct {
+// Bag contains a loaded set of secrets.
+type Bag struct {
 	secrets map[string]string
 }
 
 // LoadFromDatabase uses a previously initialized DecoderRing to decrypt all secrets currently stored in the database.
 // Rows that have been corrupted or that are unparseable once decrypted are skipped and logged.
-func LoadFromDatabase(db *sql.DB, ring *DecoderRing) (*SecretsBag, error) {
-	var bag SecretsBag
+func LoadFromDatabase(db *sql.DB, ring *DecoderRing) (*Bag, error) {
+	var bag Bag
 	bag.secrets = make(map[string]string)
 
-	keyRx := regexp.MustCompile(`\A([^=]+)=(?s:(.*))\z`)
-
-	rows, err := db.Query("SELECT ciphertext FROM secrets")
+	rows, err := db.Query("SELECT key, ciphertext FROM secrets")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
+		var key string
 		var ciphertext []byte
-		if err := rows.Scan(&ciphertext); err != nil {
+		if err := rows.Scan(&key, &ciphertext); err != nil {
 			return nil, err
 		}
 
@@ -58,31 +57,25 @@ func LoadFromDatabase(db *sql.DB, ring *DecoderRing) (*SecretsBag, error) {
 			continue
 		}
 
-		matches := keyRx.FindStringSubmatch(*plaintext)
-		if matches == nil {
-			log.Warn("Unable to parse secret value.")
-			continue
-		}
-
-		bag.secrets[matches[1]] = matches[2]
+		bag.secrets[key] = *plaintext
 	}
 
 	return &bag, nil
 }
 
 // Len returns the number of known secrets.
-func (bag *SecretsBag) Len() int {
+func (bag *Bag) Len() int {
 	return len(bag.secrets)
 }
 
 // Set adds a new secret to the bag or overwrites an existing secret with a new value.
-func (bag *SecretsBag) Set(key string, value string) {
+func (bag *Bag) Set(key string, value string) {
 	bag.secrets[key] = value
 }
 
 // Get retrieves an existing secret by key, returning a default value if no secret with this key
 // is available.
-func (bag SecretsBag) Get(key string, def string) string {
+func (bag Bag) Get(key string, def string) string {
 	if value, ok := bag.secrets[key]; ok {
 		return value
 	}
@@ -91,7 +84,7 @@ func (bag SecretsBag) Get(key string, def string) string {
 
 // GetRequired retrieves an existing secret by key. If no secret with that key is known, an error is
 // generated.
-func (bag SecretsBag) GetRequired(key string) (string, error) {
+func (bag Bag) GetRequired(key string) (string, error) {
 	if value, ok := bag.secrets[key]; ok {
 		return value, nil
 	}
@@ -99,7 +92,7 @@ func (bag SecretsBag) GetRequired(key string) (string, error) {
 }
 
 // Has returns true if a key corresponds to a known, loaded secret, and false otherwise.
-func (bag SecretsBag) Has(key string) bool {
+func (bag Bag) Has(key string) bool {
 	_, ok := bag.secrets[key]
 	return ok
 }
@@ -107,7 +100,7 @@ func (bag SecretsBag) Has(key string) bool {
 // DesiredTLSFiles constructs a map whose keys are paths on the filesystem and whose values are the contents
 // of TLS-related files that are expected to be placed at those paths. An error is returned if any of the
 // required TLS secret keys are absent.
-func (bag SecretsBag) DesiredTLSFiles() (map[string][]byte, error) {
+func (bag Bag) DesiredTLSFiles() (map[string][]byte, error) {
 	desiredContents := make(map[string][]byte, len(tlsKeysToPath))
 	for key, path := range tlsKeysToPath {
 		desired, err := bag.GetRequired(key)
@@ -121,7 +114,7 @@ func (bag SecretsBag) DesiredTLSFiles() (map[string][]byte, error) {
 
 // ActualTLSFiles constructs a map whose keys are paths on the filesystem and whose values are the actual
 // contents of files at those locations on disk. Any file not yet present has a value of nil.
-func (bag SecretsBag) ActualTLSFiles() (map[string][]byte, error) {
+func (bag Bag) ActualTLSFiles() (map[string][]byte, error) {
 	actualContents := make(map[string][]byte, len(tlsKeysToPath))
 	for _, path := range tlsKeysToPath {
 		actual, err := ioutil.ReadFile(path)
@@ -139,16 +132,15 @@ func (bag SecretsBag) ActualTLSFiles() (map[string][]byte, error) {
 // SaveToDatabase persists the current state of the bag to an open database connection. Existing secrets
 // are truncated, then this bag's contents are encrypted with the provided DecoderRing and written to the
 // table in their place.
-func (bag SecretsBag) SaveToDatabase(db *sql.DB, ring *DecoderRing) error {
-	var ciphertexts = make([][]byte, 0, len(bag.secrets))
+func (bag Bag) SaveToDatabase(db *sql.DB, ring *DecoderRing, truncate bool) error {
+	var ciphertexts = make(map[string][]byte, len(bag.secrets))
 	for key, value := range bag.secrets {
-		plaintext := key + "=" + value
-		ciphertext, err := ring.Encrypt(plaintext)
+		ciphertext, err := ring.Encrypt(value)
 		if err != nil {
 			log.WithError(err).WithField("key", key).Warn("Unable to encrypt secret.")
 			continue
 		}
-		ciphertexts = append(ciphertexts, ciphertext)
+		ciphertexts[key] = ciphertext
 	}
 
 	tx, err := db.Begin()
@@ -166,17 +158,19 @@ func (bag SecretsBag) SaveToDatabase(db *sql.DB, ring *DecoderRing) error {
 		}
 	}()
 
-	if _, err = tx.Exec("TRUNCATE TABLE secrets"); err != nil {
-		return err
+	if truncate {
+		if _, err = tx.Exec("TRUNCATE TABLE secrets"); err != nil {
+			return err
+		}
 	}
 
-	insert, err := tx.Prepare(pq.CopyIn("secrets", "ciphertext"))
+	insert, err := tx.Prepare(pq.CopyIn("secrets", "key", "ciphertext"))
 	if err != nil {
 		return err
 	}
 
-	for _, ciphertext := range ciphertexts {
-		if _, err = insert.Exec(ciphertext); err != nil {
+	for key, ciphertext := range ciphertexts {
+		if _, err = insert.Exec(key, ciphertext); err != nil {
 			return err
 		}
 	}

@@ -272,6 +272,7 @@ func initialize() {
 
 	if _, err := r.db.Exec(`
 		CREATE TABLE IF NOT EXISTS secrets (
+			key TEXT NOT NULL,
 			ciphertext bytea NOT NULL
 		)
 	`); err != nil {

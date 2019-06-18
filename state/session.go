@@ -20,7 +20,7 @@ type Session struct {
 	db      *sql.DB
 	cli     *client.Client
 	conn    *dbus.Conn
-	secrets *secrets.SecretsBag
+	secrets *secrets.Bag
 }
 
 // NewSession establishes all of the connections necessary to perform an operation.
