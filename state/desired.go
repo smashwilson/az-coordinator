@@ -197,7 +197,9 @@ func (session Session) ReadDesiredUnit(id int) (*DesiredSystemdUnit, error) {
 // ReadImages queries Docker for the most recently created container images corresponding to the image names and tags requested by
 // each DesiredSystemdUnit. This call populates the ImageID of each DesiredDockerContainer.
 func (state *DesiredState) ReadImages(session *Session) error {
-	for _, unit := range state.Units {
+	for i := range state.Units {
+		unit := &state.Units[i]
+
 		imageSummaries, err := session.cli.ImageList(context.Background(), types.ImageListOptions{
 			Filters: filters.NewArgs(filters.Arg("reference", unit.Container.ImageName+":"+unit.Container.ImageTag)),
 		})
