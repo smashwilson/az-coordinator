@@ -53,6 +53,7 @@ Requires=docker.service
 Type=oneshot
 ExecStart=/usr/bin/docker run --rm \
   --read-only \
+  --network local \
 {{- range $key, $value := .Env }}
   --env {{ $key }}="{{ $value }}" \
 {{- end }}

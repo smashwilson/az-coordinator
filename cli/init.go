@@ -385,6 +385,11 @@ func initialize() {
 		log.WithError(err).Fatal("Unable to create session.")
 	}
 
+  log.Info("Creating Docker network.")
+  if err := session.CreateNetwork(); err != nil {
+    log.WithError(err).Fatal("Unable to create Docker network.")
+  }
+
 	delta, errs := session.Synchronize(state.SyncSettings{UID: coordinatorUID, GID: azinfraGID})
 	if len(errs) > 0 {
 		for _, err := range errs {

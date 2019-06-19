@@ -10,6 +10,7 @@ import (
 
 	"github.com/coreos/go-systemd/dbus"
 	"github.com/docker/docker/api/types"
+  "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
 	"github.com/smashwilson/az-coordinator/secrets"
@@ -100,6 +101,41 @@ func (s Session) pullImage(ref string, done chan<- error) {
 	log.WithField("ref", ref).Debugf("ImagePull payload:\n%s\n---\n", payload)
 
 	done <- nil
+}
+
+// CreateNetwork ensures that the expected Docker backplane network is present.
+func (s Session) CreateNetwork() error {
+  networks, err := s.cli.NetworkList(context.Background(), types.NetworkListOptions{})
+  if err != nil {
+    return err
+  }
+
+  for _, network := range networks {
+    if network.Name == "local" {
+      // Network already exists
+      log.WithFields(log.Fields{
+        "networkID": network.ID,
+        "networkName": network.Name,
+        "networkDriver": network.Driver,
+      }).Info("Network already exists.")
+      return nil
+    }
+  }
+
+  response, err := s.cli.NetworkCreate(context.Background(), "local", types.NetworkCreate{
+    CheckDuplicate: true,
+    Driver: "bridge",
+    IPAM: &network.IPAM{
+      Driver: "default",
+    },
+    Internal: false,
+  })
+  if err != nil {
+    return err
+  }
+
+  log.WithField("networkID", response.ID).Debug("Network created.")
+  return nil
 }
 
 // ValidateSecretKeys returns an error if any of the keys requested in a set are not loaded in the
