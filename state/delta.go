@@ -274,9 +274,9 @@ func (d Delta) Apply(uid, gid int) []error {
 	// Stop and disable unit files we intend to remove.
 	if len(d.UnitsToRemove) > 0 {
 		stops := make(chan string, len(d.UnitsToRemove))
-		disablePaths := make([]string, 0, len(d.UnitsToRemove))
+		disableUnitNames := make([]string, 0, len(d.UnitsToRemove))
 		for _, unit := range d.UnitsToRemove {
-			disablePaths = append(disablePaths, unit.Path)
+			disableUnitNames = append(disableUnitNames, unit.UnitName())
 
 			log.WithField("unitName", unit.UnitName()).Debug("Stopping unit.")
 			if _, err := session.conn.StopUnit(unit.UnitName(), "replace", stops); err != nil {
@@ -293,11 +293,11 @@ func (d Delta) Apply(uid, gid int) []error {
 		}
 		log.WithField("count", len(d.UnitsToRemove)).Debug("Units stopped or killed.")
 
-		log.WithField("unitPaths", disablePaths).Debug("Disabling units.")
-		if _, err := session.conn.DisableUnitFiles(disablePaths, false); err != nil {
-			errs = append(errs, fmt.Errorf("Unable to disable units %v (%v)", disablePaths, err))
+		log.WithField("unitPaths", disableUnitNames).Debug("Disabling units.")
+		if _, err := session.conn.DisableUnitFiles(disableUnitNames, false); err != nil {
+			errs = append(errs, fmt.Errorf("Unable to disable units %v (%v)", disableUnitNames, err))
 		}
-		log.WithField("count", len(disablePaths)).Debug("Units disabled.")
+		log.WithField("count", len(disableUnitNames)).Debug("Units disabled.")
 	} else {
 		log.Debug("No units to remove.")
 	}
