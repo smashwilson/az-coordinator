@@ -402,14 +402,12 @@ func (builder *DesiredSystemdUnitBuilder) Path(path string) error {
 	return nil
 }
 
-// Type populates the template type based on a human-friendly name. If the container has also been set, the type is
-// also used to assert the validity of the presence of container data.
-func (builder *DesiredSystemdUnitBuilder) Type(typeName string) error {
-	t, err := UnitTypeNamed(typeName)
-	if err != nil {
-		return err
-	}
-	builder.unit.Type = t
+// Type populates the template type.
+func (builder *DesiredSystemdUnitBuilder) Type(tp UnitType) error {
+  if _, ok := namesByType[tp]; !ok {
+    return fmt.Errorf("Invalid type: %d", tp)
+  }
+	builder.unit.Type = tp
 	return nil
 }
 

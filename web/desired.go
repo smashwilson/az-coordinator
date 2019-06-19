@@ -74,13 +74,13 @@ func (s Server) handleCreateDesired(w http.ResponseWriter, r *http.Request) {
 
 	type createRequest struct {
 		Path      string                 `json:"path"`
-		TypeName  string                 `json:"type"`
+		Type      state.UnitType         `json:"type"`
 		Container createRequestContainer `json:"container"`
 		Secrets   []string               `json:"secrets"`
 		Env       map[string]string      `json:"env"`
 		Ports     map[int]int            `json:"ports"`
 		Volumes   map[string]string      `json:"volumes"`
-		Schedule  string                 `json:"calendar,omitempty"`
+		Schedule  string                 `json:"calendar"`
 	}
 
 	session, err := s.newSession()
@@ -110,7 +110,7 @@ func (s Server) handleCreateDesired(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tried(builder.Path(desiredReq.Path))
-	tried(builder.Type(desiredReq.TypeName))
+	tried(builder.Type(desiredReq.Type))
 	tried(builder.Container(desiredReq.Container.ImageName, desiredReq.Container.ImageTag, desiredReq.Container.Name))
 	tried(builder.Secrets(desiredReq.Secrets, *session))
 	tried(builder.Volumes(desiredReq.Volumes))
@@ -157,7 +157,7 @@ func (s Server) handleUpdateDesired(w http.ResponseWriter, r *http.Request, id i
 	}
 
 	type updateRequest struct {
-		TypeName  string                 `json:"type"`
+		Type      state.UnitType         `json:"type"`
 		Container updateRequestContainer `json:"container"`
 		Secrets   []string               `json:"secrets"`
 		Env       map[string]string      `json:"env"`
@@ -210,7 +210,7 @@ func (s Server) handleUpdateDesired(w http.ResponseWriter, r *http.Request, id i
 		}
 	}
 
-	tried(builder.Type(updateReq.TypeName))
+	tried(builder.Type(updateReq.Type))
 	tried(builder.Container(updateReq.Container.ImageName, updateReq.Container.ImageTag, updateReq.Container.Name))
 	tried(builder.Secrets(updateReq.Secrets, *session))
 	tried(builder.Volumes(updateReq.Volumes))
