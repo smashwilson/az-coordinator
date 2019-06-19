@@ -39,6 +39,10 @@ func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err = desired.ReadImages(session); err != nil {
+		log.WithError(err).Error("Unable to read current container images.")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Unable to read current container images."))
 		return
 	}
 
