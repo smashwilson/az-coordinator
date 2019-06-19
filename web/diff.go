@@ -2,7 +2,6 @@ package web
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	log "github.com/sirupsen/logrus"
@@ -20,7 +19,7 @@ func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.WithError(err).Error("Unable to establish a session.")
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Unable to establish a session.\n")
+		w.Write([]byte("Unable to establish a session."))
 		return
 	}
 
@@ -28,7 +27,7 @@ func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.WithError(err).Error("Unable to load the actual system state.")
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Unable to load the actual system state.\n")
+		w.Write([]byte("Unable to load the actual system state."))
 		return
 	}
 
@@ -36,7 +35,10 @@ func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.WithError(err).Error("Unable to load the desired system state.")
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Unable to load the desired system state.\n")
+		w.Write([]byte("Unable to load the desired system state."))
+		return
+	}
+
 		return
 	}
 
@@ -44,7 +46,7 @@ func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
 	if err = json.NewEncoder(w).Encode(&delta); err != nil {
 		log.WithError(err).Error("Unable to serialize JSON.")
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Unable to serialize JSON.\n")
+		w.Write([]byte("Unable to serialize JSON"))
 		return
 	}
 }
