@@ -92,11 +92,11 @@ type DesiredSystemdUnit struct {
 	ID        *int                   `json:"id,omitempty"`
 	Path      string                 `json:"path"`
 	Type      UnitType               `json:"type"`
-	Container DesiredDockerContainer `json:"container,omitempty"`
-	Secrets   []string               `json:"secrets,omitempty"`
-	Env       map[string]string      `json:"env,omitempty"`
-	Ports     map[int]int            `json:"ports,omitempty"`
-	Volumes   map[string]string      `json:"volumes,omitempty"`
+	Container DesiredDockerContainer `json:"container"`
+	Secrets   []string               `json:"secrets"`
+	Env       map[string]string      `json:"env"`
+	Ports     map[int]int            `json:"ports"`
+	Volumes   map[string]string      `json:"volumes"`
 	Schedule  string                 `json:"calendar,omitempty"`
 }
 
