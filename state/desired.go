@@ -14,6 +14,65 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// UnitType is an enumeration used to choose which template should be used to create a DesiredSystemdUnit's unit
+// file.
+type UnitType int
+
+const (
+	// TypeSimple units manage a persistent Docker container as a daemon.
+	TypeSimple UnitType = iota
+
+	// TypeTimer units fire another unit on a schedule.
+	TypeTimer
+
+	// TypeOneShot units execute a container and expect it to terminate in an order fashion.
+	TypeOneShot
+
+	// TypeSelf is the special unit used to managed the az-coordinator binary itself.
+	TypeSelf
+)
+
+var typesByName = map[string]UnitType{
+	"simple":  TypeSimple,
+	"oneshot": TypeOneShot,
+	"timer":   TypeTimer,
+	"self":    TypeSelf,
+}
+
+var namesByType = map[UnitType]string{
+  TypeSimple: "simple",
+  TypeOneShot: "oneshot",
+  TypeTimer: "timer",
+  TypeSelf: "self",
+}
+
+// UnitTypeNamed returns a valid UnitType matching a string name, or returns an error if the type name is not valid.
+func UnitTypeNamed(typeName string) (UnitType, error) {
+  if tp, ok := typesByName[typeName]; ok {
+    return tp, nil
+  }
+  return 0, fmt.Errorf("Unrecognized type name: %s", typeName)
+}
+
+// UnmarshalJSON parses a JSON string into a UnitType.
+func (t *UnitType) UnmarshalJSON(b []byte) error {
+  var s string
+  if err := json.Unmarshal(b, &s); err != nil {
+    return err
+  }
+  tp, ok := typesByName[s]
+  if  !ok {
+    return fmt.Errorf("Invalid unit type: %s", s)
+  }
+  *t = tp
+  return nil
+}
+
+// MarshalJSON serializes a UnitType as a JSON string.
+func (t *UnitType) MarshalJSON() ([]byte, error) {
+  return json.Marshal(namesByType[*t])
+}
+
 // DesiredState describes the target state of the system based on the contents of the coordinator database.
 type DesiredState struct {
 	Units []DesiredSystemdUnit `json:"units"`
@@ -22,22 +81,22 @@ type DesiredState struct {
 
 // DesiredDockerContainer contains information about the Docker container image to be used by a SystemD unit.
 type DesiredDockerContainer struct {
-	Name      string `json:"name"`
-	ImageID   string `json:"image_id"`
-	ImageName string `json:"image_name"`
-	ImageTag  string `json:"image_tag"`
+	Name      string `json:"name,omitempty"`
+	ImageName string `json:"image_name,omitempty"`
+	ImageTag  string `json:"image_tag,omitempty"`
+  ImageID   string `json:"-"`
 }
 
 // DesiredSystemdUnit contains information about a SystemD unit managed by the coordinator.
 type DesiredSystemdUnit struct {
 	ID        *int                   `json:"id,omitempty"`
 	Path      string                 `json:"path"`
-	Type      int                    `json:"type"`
-	Container DesiredDockerContainer `json:"container"`
-	Secrets   []string               `json:"secrets"`
-	Env       map[string]string      `json:"env"`
-	Ports     map[int]int            `json:"ports"`
-	Volumes   map[string]string      `json:"volumes"`
+	Type      UnitType               `json:"type"`
+	Container DesiredDockerContainer `json:"container,omitempty"`
+	Secrets   []string               `json:"secrets,omitempty"`
+	Env       map[string]string      `json:"env,omitempty"`
+	Ports     map[int]int            `json:"ports,omitempty"`
+	Volumes   map[string]string      `json:"volumes,omitempty"`
 	Schedule  string                 `json:"calendar,omitempty"`
 }
 
@@ -346,7 +405,7 @@ func (builder *DesiredSystemdUnitBuilder) Path(path string) error {
 // Type populates the template type based on a human-friendly name. If the container has also been set, the type is
 // also used to assert the validity of the presence of container data.
 func (builder *DesiredSystemdUnitBuilder) Type(typeName string) error {
-	t, err := GetTypeWithName(typeName)
+	t, err := UnitTypeNamed(typeName)
 	if err != nil {
 		return err
 	}

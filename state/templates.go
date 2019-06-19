@@ -9,20 +9,6 @@ import (
 	"text/template"
 )
 
-const (
-	// TypeSimple units manage a persistent Docker container as a daemon.
-	TypeSimple = iota
-
-	// TypeTimer units fire another unit on a schedule.
-	TypeTimer = iota
-
-	// TypeOneShot units execute a container and expect it to terminate in an order fashion.
-	TypeOneShot = iota
-
-	// TypeSelf is the special unit used to managed the az-coordinator binary itself.
-	TypeSelf = iota
-)
-
 type resolvedSystemdUnit struct {
 	U        DesiredSystemdUnit
 	UnitName string
@@ -111,21 +97,14 @@ WantedBy=multi-user.target
 
 var selfTemplate = template.Must(template.New("self").Parse(selfSource))
 
-var templatesByType = map[int]*template.Template{
+var templatesByType = map[UnitType]*template.Template{
 	TypeSimple:  simpleTemplate,
 	TypeOneShot: oneShotTemplate,
 	TypeTimer:   timerTemplate,
 	TypeSelf:    selfTemplate,
 }
 
-var typesByName = map[string]int{
-	"simple":  TypeSimple,
-	"oneshot": TypeOneShot,
-	"timer":   TypeTimer,
-	"self":    TypeSelf,
-}
-
-func getTemplate(templateType int) (*template.Template, error) {
+func getTemplate(templateType UnitType) (*template.Template, error) {
 	if t, ok := templatesByType[templateType]; ok {
 		return t, nil
 	}
@@ -169,15 +148,6 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 		Env:      fullEnv,
 		Argv0:    argv0,
 	}, errs
-}
-
-// GetTypeWithName returns the unit type enum value corresponding with a friendly string name, or
-// an error if the type is unrecognized.
-func GetTypeWithName(name string) (int, error) {
-	if tp, ok := typesByName[name]; ok {
-		return tp, nil
-	}
-	return 0, fmt.Errorf("Unrecognized type name: %s", name)
 }
 
 // WriteUnit uses the template requested by a DesiredSystemdUnit to generate the expected contents of a
