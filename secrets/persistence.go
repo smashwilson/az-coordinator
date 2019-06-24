@@ -126,6 +126,16 @@ func (bag Bag) DesiredTLSFiles() (map[string][]byte, error) {
 	return desiredContents, nil
 }
 
+// IsTLSFile returns true if filePath is TLS-related and false if not.
+func (bag Bag) IsTLSFile(filePath string) bool {
+	for _, path := range tlsKeysToPath {
+		if path == filePath {
+			return true
+		}
+	}
+	return false
+}
+
 // ActualTLSFiles constructs a map whose keys are paths on the filesystem and whose values are the actual
 // contents of files at those locations on disk. Any file not yet present has a value of nil.
 func (bag Bag) ActualTLSFiles() (map[string][]byte, error) {

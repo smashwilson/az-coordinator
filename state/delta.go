@@ -156,6 +156,16 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 	}
 }
 
+// CoordinatorRestartNeeded returns true if this Delta will require the coordinator itself to restart.
+func (d Delta) CoordinatorRestartNeeded() bool {
+	for _, filePath := range d.FilesToWrite {
+		if d.session.secrets.IsTLSFile(filePath) {
+			return true
+		}
+	}
+	return false
+}
+
 // Apply enacts the changes described by a Delta on the system. Individual operations that fail append errors to
 // the returned error slice, but do not prevent subsequent operations from being attempted.
 func (d Delta) Apply(uid, gid int) []error {
@@ -374,6 +384,11 @@ func (d Delta) Apply(uid, gid int) []error {
 		log.Debug("No unit files to remove.")
 	}
 
+	if d.CoordinatorRestartNeeded() {
+		log.Info("Restarting coordinator.")
+		os.Exit(0)
+	}
+
 	return errs
 }
 
@@ -409,6 +424,10 @@ func (d Delta) String() string {
 
 	for _, f := range d.FilesToWrite {
 		fmt.Fprintf(&b, "write file: %s contentlen=%d\n", f, len(d.fileContent[f]))
+	}
+
+	if d.CoordinatorRestartNeeded() {
+		fmt.Fprintf(&b, "coordinator restart needed\n")
 	}
 
 	return b.String()
