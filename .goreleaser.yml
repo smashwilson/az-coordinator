@@ -9,6 +9,8 @@ builds:
   - windows
   goarch:
   - amd64
+  env:
+  - CGO_ENABLED=0
 snapshot:
   name_template: "snapshot-{{ .Commit }}"
 changelog:
