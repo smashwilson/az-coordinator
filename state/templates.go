@@ -26,7 +26,6 @@ Restart=always
 ExecStartPre=-/usr/bin/docker kill {{ .U.Container.Name }}
 ExecStartPre=-/usr/bin/docker rm {{ .U.Container.Name }}
 ExecStart=/usr/bin/docker run \
-  --read-only \
   --network local \
 {{- range $key, $value := .Env }}
   --env {{ $key }}="{{ $value }}" \
@@ -53,7 +52,6 @@ Requires=docker.service
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/docker run --rm \
-  --read-only \
   --network local \
 {{- range $key, $value := .Env }}
   --env {{ $key }}="{{ $value }}" \
