@@ -22,6 +22,7 @@ After=docker.service
 Requires=docker.service
 
 [Service]
+Restart=always
 ExecStartPre=-/usr/bin/docker kill {{ .U.Container.Name }}
 ExecStartPre=-/usr/bin/docker rm {{ .U.Container.Name }}
 ExecStart=/usr/bin/docker run \
@@ -87,6 +88,7 @@ Wants=docker.service
 
 [Service]
 User=coordinator
+Restart=always
 {{- range $key, $value := .Env }}
 Environment="{{ $key }}={{ $value }}"
 {{- end }}
