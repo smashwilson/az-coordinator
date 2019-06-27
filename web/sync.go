@@ -151,7 +151,7 @@ func (s *Server) performSync() {
 }
 
 func (s *Server) handleSyncRoot(w http.ResponseWriter, r *http.Request) {
-	s.cors(w, r, methodHandlerMap{
+	s.methods(w, r, methodHandlerMap{
 		http.MethodGet:  func() { s.handleGetSync(w, r) },
 		http.MethodPost: func() { s.handleCreateSync(w, r) },
 	})

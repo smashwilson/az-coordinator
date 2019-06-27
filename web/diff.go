@@ -9,7 +9,7 @@ import (
 )
 
 func (s Server) handleDiffRoot(w http.ResponseWriter, r *http.Request) {
-	s.cors(w, r, methodHandlerMap{
+	s.methods(w, r, methodHandlerMap{
 		http.MethodGet: func() { s.handleGetDiff(w, r) },
 	})
 }

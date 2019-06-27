@@ -9,7 +9,7 @@ func (s Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.cors(w, r, methodHandlerMap{
+	s.methods(w, r, methodHandlerMap{
 		http.MethodGet: func() { w.Write([]byte("ok")) },
 	})
 }

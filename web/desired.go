@@ -13,7 +13,7 @@ import (
 )
 
 func (s Server) handleDesiredRoot(w http.ResponseWriter, r *http.Request) {
-	s.cors(w, r, methodHandlerMap{
+	s.methods(w, r, methodHandlerMap{
 		http.MethodGet:  func() { s.handleListDesired(w, r) },
 		http.MethodPost: func() { s.handleCreateDesired(w, r) },
 	})
@@ -34,7 +34,7 @@ func (s Server) handleDesired(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.cors(w, r, methodHandlerMap{
+	s.methods(w, r, methodHandlerMap{
 		http.MethodPut:    func() { s.handleUpdateDesired(w, r, int(id)) },
 		http.MethodDelete: func() { s.handleDeleteDesired(w, r, int(id)) },
 	})

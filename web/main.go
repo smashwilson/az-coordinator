@@ -31,13 +31,13 @@ func NewServer(opts *config.Options, db *sql.DB, ring *secrets.DecoderRing) Serv
 		currentSync: &syncProgress{},
 	}
 
-	http.HandleFunc("/", s.handleRoot)
-	http.HandleFunc("/secrets", s.protected(s.handleSecretsRoot))
-	http.HandleFunc("/desired", s.protected(s.handleDesiredRoot))
-	http.HandleFunc("/desired/", s.protected(s.handleDesired))
-	http.HandleFunc("/actual", s.protected(s.handleActualRoot))
-	http.HandleFunc("/diff", s.protected(s.handleDiffRoot))
-	http.HandleFunc("/sync", s.protected(s.handleSyncRoot))
+	http.HandleFunc("/", s.wrap(s.handleRoot, false))
+	http.HandleFunc("/secrets", s.wrap(s.handleSecretsRoot, true))
+	http.HandleFunc("/desired", s.wrap(s.handleDesiredRoot, true))
+	http.HandleFunc("/desired/", s.wrap(s.handleDesired, true))
+	http.HandleFunc("/actual", s.wrap(s.handleActualRoot, true))
+	http.HandleFunc("/diff", s.wrap(s.handleDiffRoot, true))
+	http.HandleFunc("/sync", s.wrap(s.handleSyncRoot, true))
 
 	return s
 }
@@ -48,9 +48,53 @@ func (s Server) Listen() error {
 	return http.ListenAndServeTLS(s.opts.ListenAddress, secrets.FilenameTLSCertificate, secrets.FilenameTLSKey, nil)
 }
 
-func (s Server) protected(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+var allowedMethods = map[string]bool{
+	"GET": true,
+	"POST": true,
+	"PUT": true,
+	"DELETE": true,
+	"OPTIONS": true,
+}
+
+func buildMethodList() string {
+	ms := []string{}
+	for m := range allowedMethods {
+		ms = append(ms, m)
+	}
+	return strings.Join(ms, ", ")
+}
+
+func (s Server) wrap(handler func(http.ResponseWriter, *http.Request), protected bool) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if _, password, ok := r.BasicAuth(); !ok || password != s.opts.AuthToken {
+		username, password, ok := r.BasicAuth()
+		log.WithFields(log.Fields{
+			"method": r.Method,
+			"username": username,
+			"password": password,
+			"path": r.URL.Path,
+			"headers": r.Header,
+		}).Debug("Request.")
+
+		// CORS preflight requests
+		w.Header().Set("Access-Control-Allow-Origin", s.opts.AllowedOrigin)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Allow-Methods", buildMethodList())
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		w.Header().Set("Access-Control-Max-Age", "60")
+
+		if r.Method == http.MethodOptions {
+			proposedMethod := r.Header.Get("Access-Control-Request-Method")
+			if _, ok := allowedMethods[proposedMethod]; !ok {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Invalid method requested in CORS preflight request."))
+				return
+			}
+
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		if protected && (!ok || password != s.opts.AuthToken) {
 			w.WriteHeader(401)
 			w.Write([]byte("Unauthorized"))
 			return
@@ -62,31 +106,7 @@ func (s Server) protected(handler func(http.ResponseWriter, *http.Request)) func
 
 type methodHandlerMap map[string]func()
 
-func (s Server) cors(w http.ResponseWriter, r *http.Request, handlers methodHandlerMap) {
-	w.Header().Set("Access-Control-Allow-Origin", s.opts.AllowedOrigin)
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-
-	if r.Method == http.MethodOptions {
-		allowedMethods := make([]string, 0, len(handlers)+1)
-		allowedMethods = append(allowedMethods, "OPTIONS")
-		for method := range handlers {
-			allowedMethods = append(allowedMethods, method)
-		}
-		w.Header().Set("Access-Control-Allow-Methods", strings.Join(allowedMethods, ", "))
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-		w.Header().Set("Access-Control-Max-Age", "60")
-
-		proposedMethod := r.Header.Get("Access-Control-Request-Method")
-		if _, ok := handlers[proposedMethod]; !ok {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Invalid method requested in CORS preflight request."))
-			return
-		}
-
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
+func (s Server) methods(w http.ResponseWriter, r *http.Request, handlers methodHandlerMap) {
 	handler, ok := handlers[r.Method]
 	if !ok {
 		w.WriteHeader(http.StatusMethodNotAllowed)

@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Server) handleSecretsRoot(w http.ResponseWriter, r *http.Request) {
-	s.cors(w, r, methodHandlerMap{
+	s.methods(w, r, methodHandlerMap{
 		http.MethodGet:    func() { s.handleListSecrets(w, r) },
 		http.MethodPost:   func() { s.handleCreateSecrets(w, r) },
 		http.MethodDelete: func() { s.handleDeleteSecrets(w, r) },
