@@ -82,8 +82,8 @@ type DesiredState struct {
 // DesiredDockerContainer contains information about the Docker container image to be used by a SystemD unit.
 type DesiredDockerContainer struct {
 	Name      string `json:"name,omitempty"`
-	ImageName string `json:"image_name,omitempty"`
-	ImageTag  string `json:"image_tag,omitempty"`
+	ImageName string `json:"image_name"`
+	ImageTag  string `json:"image_tag"`
   ImageID   string `json:"-"`
 }
 
@@ -154,6 +154,8 @@ func (session Session) readDesiredUnits(whereClause string, queryArgs ...interfa
 			log.WithError(err).WithField("unit", unit.UnitName()).Warn("Malformed volumes column in state_systemd_units row")
 			log.Warnf("Contents:\n%s\n---\n", rawVolumes)
 		}
+
+		unit.normalizeNils()
 
 		units = append(units, unit)
 	}
@@ -235,6 +237,7 @@ func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
 	if unit.ID != nil {
 		return fmt.Errorf("Attempt to re-persist already persisted unit: %d", unit.ID)
 	}
+	unit.normalizeNils()
 
 	var db = session.db
 
@@ -276,7 +279,7 @@ func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
 	return createdRow.Scan(&unit.ID)
 }
 
-// Update modifies an existing unit to match its in-memory representation.
+// Update modifies an existing unit in the database to match its in-memory representation.
 func (unit DesiredSystemdUnit) Update(session Session) error {
 	if unit.ID == nil {
 		return errors.New("Attempt to update an un-persisted desired unit")
@@ -325,6 +328,23 @@ func (unit DesiredSystemdUnit) Update(session Session) error {
 // UnitName derives the SystemD logical unit name from the path of its source on disk.
 func (unit DesiredSystemdUnit) UnitName() string {
 	return path.Base(unit.Path)
+}
+
+// Ensure slice and map members are initialized to zero-length objects instead of nil. This prevents them
+// from appearing in JSON output as "null".
+func (unit *DesiredSystemdUnit) normalizeNils() {
+	if unit.Secrets == nil {
+		unit.Secrets = make([]string, 0);
+	}
+	if unit.Env == nil {
+		unit.Env = make(map[string]string, 0);
+	}
+	if unit.Ports == nil {
+		unit.Ports = make(map[int]int, 0);
+	}
+	if unit.Volumes == nil {
+		unit.Volumes = make(map[string]string, 0);
+	}
 }
 
 // DesiredSystemdUnitBuilder incrementally constructs and validates a DesiredUnit.
@@ -380,6 +400,8 @@ func (builder *DesiredSystemdUnitBuilder) validate() error {
 			return errors.New("non-timer units may not have a schedule")
 		}
 	}
+
+	builder.unit.normalizeNils()
 
 	return nil
 }
