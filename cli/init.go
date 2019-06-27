@@ -384,6 +384,7 @@ func initialize() {
 	if err != nil {
 		log.WithError(err).Fatal("Unable to create session.")
 	}
+	defer session.Close()
 
   log.Info("Creating Docker network.")
   if err := session.CreateNetwork(); err != nil {

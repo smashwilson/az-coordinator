@@ -9,6 +9,7 @@ import (
 
 func diff() {
 	var r = prepare(needs{session: true})
+	defer r.session.Close()
 
 	log.Info("Reading desired state.")
 	desired, err := r.session.ReadDesiredState()

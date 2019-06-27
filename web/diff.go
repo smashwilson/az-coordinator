@@ -22,6 +22,7 @@ func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Unable to establish a session."))
 		return
 	}
+	defer session.Close()
 
 	actual, err := session.ReadActualState()
 	if err != nil {

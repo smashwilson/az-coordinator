@@ -22,6 +22,7 @@ func (s Server) handleListActual(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Unable to establish a session.\n")
 		return
 	}
+	defer session.Close()
 
 	actual, err := session.ReadActualState()
 	if err != nil {

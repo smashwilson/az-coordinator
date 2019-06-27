@@ -24,6 +24,7 @@ func serve() {
 	} else {
 		log.WithField("delta", delta).Debug("Delta applied.")
 	}
+	r.session.Close()
 
 	s := web.NewServer(r.options, r.db, r.ring)
 	if err := s.Listen(); err != nil {

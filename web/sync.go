@@ -136,6 +136,7 @@ func (s *Server) performSync() {
 		s.currentSync.setErrors([]error{err})
 		return
 	}
+	defer session.Close()
 
 	delta, errs := session.Synchronize(state.SyncSettings{Reporter: reporter})
 	if len(errs) > 0 {

@@ -48,6 +48,7 @@ func (s Server) handleListDesired(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Unable to establish a session"))
 		return
 	}
+	defer session.Close()
 
 	desired, err := session.ReadDesiredState()
 	if err != nil {
@@ -90,6 +91,7 @@ func (s Server) handleCreateDesired(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Unable to establish a session"))
 		return
 	}
+	defer session.Close()
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
@@ -175,6 +177,7 @@ func (s Server) handleUpdateDesired(w http.ResponseWriter, r *http.Request, id i
 		w.Write([]byte("Unable to establish a session"))
 		return
 	}
+	defer session.Close()
 
 	unit, err := session.ReadDesiredUnit(id)
 	if err != nil {
@@ -257,6 +260,7 @@ func (s Server) handleDeleteDesired(w http.ResponseWriter, r *http.Request, id i
 		w.Write([]byte("Unable to establish a session"))
 		return
 	}
+	defer session.Close()
 
 	if err := session.UndesireUnit(id); err != nil {
 		log.WithError(err).Error("Unable to delete unit.")

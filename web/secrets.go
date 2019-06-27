@@ -24,6 +24,7 @@ func (s *Server) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Unable to establish session."))
 		return
 	}
+	defer session.Close()
 
 	keys := session.ListSecretKeys()
 	encoder := json.NewEncoder(w)
@@ -46,6 +47,7 @@ func (s *Server) handleCreateSecrets(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Unable to establish session."))
 		return
 	}
+	defer session.Close()
 
 	toCreate := make(map[string]string)
 	decoder := json.NewDecoder(r.Body)
@@ -73,6 +75,7 @@ func (s *Server) handleDeleteSecrets(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Unable to establish session."))
 		return
 	}
+	defer session.Close()
 
 	toDelete := make([]string, 0, 10)
 	decoder := json.NewDecoder(r.Body)
