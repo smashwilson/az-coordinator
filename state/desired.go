@@ -92,7 +92,7 @@ type DesiredSystemdUnit struct {
 	ID        *int                   `json:"id,omitempty"`
 	Path      string                 `json:"path"`
 	Type      UnitType               `json:"type"`
-	Container DesiredDockerContainer `json:"container"`
+	Container *DesiredDockerContainer `json:"container,omitempty"`
 	Secrets   []string               `json:"secrets"`
 	Env       map[string]string      `json:"env"`
 	Ports     map[int]int            `json:"ports"`
@@ -125,7 +125,9 @@ func (session Session) readDesiredUnits(whereClause string, queryArgs ...interfa
 			rawVolumes []byte
 		)
 
-		unit := DesiredSystemdUnit{}
+		unit := DesiredSystemdUnit{
+			Container: &DesiredDockerContainer{},
+		}
 		if err = unitRows.Scan(
 			&unit.ID, &unit.Path, &unit.Type,
 			&unit.Container.Name, &unit.Container.ImageName, &unit.Container.ImageTag,
@@ -134,6 +136,9 @@ func (session Session) readDesiredUnits(whereClause string, queryArgs ...interfa
 		); err != nil {
 			log.WithError(err).Warn("Unable to load state_systemd_units row.")
 			continue
+		}
+		if len(unit.Container.ImageName) == 0 && len(unit.Container.ImageTag) == 0 {
+			unit.Container = nil
 		}
 
 		if err = json.Unmarshal(rawSecrets, &unit.Secrets); err != nil {
