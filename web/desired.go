@@ -75,7 +75,7 @@ func (s Server) handleCreateDesired(w http.ResponseWriter, r *http.Request) {
 	type createRequest struct {
 		Path      string                 `json:"path"`
 		Type      state.UnitType         `json:"type"`
-		Container createRequestContainer `json:"container"`
+		Container *createRequestContainer `json:"container,omitempty"`
 		Secrets   []string               `json:"secrets"`
 		Env       map[string]string      `json:"env"`
 		Ports     map[int]int            `json:"ports"`
@@ -111,7 +111,9 @@ func (s Server) handleCreateDesired(w http.ResponseWriter, r *http.Request) {
 
 	tried(builder.Path(desiredReq.Path))
 	tried(builder.Type(desiredReq.Type))
-	tried(builder.Container(desiredReq.Container.ImageName, desiredReq.Container.ImageTag, desiredReq.Container.Name))
+	if desiredReq.Container != nil {
+		tried(builder.Container(desiredReq.Container.ImageName, desiredReq.Container.ImageTag, desiredReq.Container.Name))
+	}
 	tried(builder.Secrets(desiredReq.Secrets, *session))
 	tried(builder.Volumes(desiredReq.Volumes))
 	tried(builder.Env(desiredReq.Env))
