@@ -206,6 +206,9 @@ func (session Session) ReadDesiredUnit(id int) (*DesiredSystemdUnit, error) {
 func (state *DesiredState) ReadImages(session *Session) error {
 	for i := range state.Units {
 		unit := &state.Units[i]
+		if unit.Container == nil {
+			continue
+		}
 
 		imageSummaries, err := session.cli.ImageList(context.Background(), types.ImageListOptions{
 			Filters: filters.NewArgs(filters.Arg("reference", unit.Container.ImageName+":"+unit.Container.ImageTag)),
@@ -266,6 +269,17 @@ func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
 		return err
 	}
 
+	var (
+		containerName = ""
+		containerImageName = ""
+		containerImageTag = ""
+	)
+	if unit.Container != nil {
+		containerName = unit.Container.Name
+		containerImageName = unit.Container.ImageName
+		containerImageTag = unit.Container.ImageTag
+	}
+
 	createdRow := db.QueryRow(`
     INSERT INTO state_systemd_units
       (path, type,
@@ -276,7 +290,7 @@ func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
 	RETURNING id
   `,
 		unit.Path, unit.Type,
-		unit.Container.Name, unit.Container.ImageName, unit.Container.ImageTag,
+		containerName, containerImageName, containerImageTag,
 		rawSecrets, rawEnv, rawPorts, rawVolumes,
 		unit.Schedule,
 	)
@@ -375,12 +389,20 @@ func (builder *DesiredSystemdUnitBuilder) validate() error {
 	// Check container data validity.
 	switch builder.unit.Type {
 	case TypeSimple:
+		if builder.unit.Container == nil {
+			return errors.New("Invalid missing container")
+		}
+
 		if len(builder.unit.Container.Name) == 0 {
 			return errors.New("invalid empty container name")
 		}
 
 		fallthrough
 	case TypeOneShot:
+		if builder.unit.Container == nil {
+			return errors.New("Invalid missing container")
+		}
+
 		if !strings.HasPrefix(builder.unit.Container.ImageName, "quay.io/smashwilson/az-") {
 			log.WithField("imageName", builder.unit.Container.ImageName).Warn("Attempt to create desired unit with invalid container image.")
 			return errors.New("invalid container image name")
@@ -390,7 +412,7 @@ func (builder *DesiredSystemdUnitBuilder) validate() error {
 			return errors.New("invalid empty container image tag")
 		}
 	default:
-		if len(builder.unit.Container.Name) > 0 || len(builder.unit.Container.ImageTag) > 0 || len(builder.unit.Container.Name) > 0 {
+		if builder.unit.Container != nil {
 			return errors.New("attempt to specify container information for unit type that does not use one")
 		}
 	}
@@ -444,9 +466,11 @@ func (builder *DesiredSystemdUnitBuilder) Type(tp UnitType) error {
 // begin with `quay.io/smashwilson/az-`. If the type has already been set, it is used to validate whether or not
 // a container is expected to be set or not.
 func (builder *DesiredSystemdUnitBuilder) Container(imageName string, imageTag string, name string) error {
-	builder.unit.Container.ImageName = imageName
-	builder.unit.Container.ImageTag = imageTag
-	builder.unit.Container.Name = name
+	builder.unit.Container = &DesiredDockerContainer{
+		Name: name,
+		ImageName: imageName,
+		ImageTag: imageTag,
+	}
 	return nil
 }
 

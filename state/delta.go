@@ -79,7 +79,7 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 				continue
 			}
 
-			if desired.Container.Name == "" {
+			if desired.Container == nil || desired.Container.Name == "" {
 				// If the desired unit doesn't specify a container name, then the running container will have an automatically
 				// assigned one. Usually this means it's a one-shot.
 				continue
@@ -397,7 +397,7 @@ func (d Delta) String() string {
 
 	writeDesiredUnit := func(u DesiredSystemdUnit) {
 		b.WriteString(u.Path)
-		if len(u.Container.ImageName) > 0 && len(u.Container.ImageTag) > 0 {
+		if u.Container != nil && len(u.Container.ImageName) > 0 && len(u.Container.ImageTag) > 0 {
 			fmt.Fprintf(&b, " container=(%s:%s)", u.Container.ImageName, u.Container.ImageTag)
 		}
 		b.WriteString("\n")

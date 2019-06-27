@@ -62,7 +62,7 @@ func (s Session) PullAllImages(state DesiredState) []error {
 
 	imageRefs := make(map[string]bool, len(state.Units))
 	for _, unit := range state.Units {
-		if len(unit.Container.ImageName) > 0 && len(unit.Container.ImageTag) > 0 {
+		if unit.Container != nil && len(unit.Container.ImageName) > 0 && len(unit.Container.ImageTag) > 0 {
 			ref := unit.Container.ImageName + ":" + unit.Container.ImageTag
 			imageRefs[ref] = true
 			log.WithField("ref", ref).Debug("Scheduling docker pull.")

@@ -9,7 +9,7 @@ import (
 )
 
 func (s Server) handleActualRoot(w http.ResponseWriter, r *http.Request) {
-	s.cors(w, r, methodHandlerMap{
+	s.methods(w, r, methodHandlerMap{
 		http.MethodGet: func() { s.handleListActual(w, r) },
 	})
 }

@@ -139,7 +139,7 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 	}
 
 	unitName := unit.UnitName()
-	if len(unit.Container.Name) != 0 {
+	if unit.Container != nil && len(unit.Container.Name) != 0 {
 		unitName = unit.Container.Name
 	}
 
