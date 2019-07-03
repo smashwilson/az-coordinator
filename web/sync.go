@@ -134,6 +134,7 @@ func (h *syncHook) Fire(entry *log.Entry) error {
 
 func (s *Server) performSync() {
 	logger := log.New()
+	logger.SetLevel(log.TraceLevel)
 	logger.AddHook(&syncHook{
 		progress: s.currentSync,
 	})
