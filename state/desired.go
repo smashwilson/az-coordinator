@@ -11,7 +11,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 // UnitType is an enumeration used to choose which template should be used to create a DesiredSystemdUnit's unit
@@ -40,37 +40,37 @@ var typesByName = map[string]UnitType{
 }
 
 var namesByType = map[UnitType]string{
-  TypeSimple: "simple",
-  TypeOneShot: "oneshot",
-  TypeTimer: "timer",
-  TypeSelf: "self",
+	TypeSimple:  "simple",
+	TypeOneShot: "oneshot",
+	TypeTimer:   "timer",
+	TypeSelf:    "self",
 }
 
 // UnitTypeNamed returns a valid UnitType matching a string name, or returns an error if the type name is not valid.
 func UnitTypeNamed(typeName string) (UnitType, error) {
-  if tp, ok := typesByName[typeName]; ok {
-    return tp, nil
-  }
-  return 0, fmt.Errorf("Unrecognized type name: %s", typeName)
+	if tp, ok := typesByName[typeName]; ok {
+		return tp, nil
+	}
+	return 0, fmt.Errorf("Unrecognized type name: %s", typeName)
 }
 
 // UnmarshalJSON parses a JSON string into a UnitType.
 func (t *UnitType) UnmarshalJSON(b []byte) error {
-  var s string
-  if err := json.Unmarshal(b, &s); err != nil {
-    return err
-  }
-  tp, ok := typesByName[s]
-  if  !ok {
-    return fmt.Errorf("Invalid unit type: %s", s)
-  }
-  *t = tp
-  return nil
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	tp, ok := typesByName[s]
+	if !ok {
+		return fmt.Errorf("Invalid unit type: %s", s)
+	}
+	*t = tp
+	return nil
 }
 
 // MarshalJSON serializes a UnitType as a JSON string.
 func (t *UnitType) MarshalJSON() ([]byte, error) {
-  return json.Marshal(namesByType[*t])
+	return json.Marshal(namesByType[*t])
 }
 
 // DesiredState describes the target state of the system based on the contents of the coordinator database.
@@ -84,24 +84,27 @@ type DesiredDockerContainer struct {
 	Name      string `json:"name,omitempty"`
 	ImageName string `json:"image_name"`
 	ImageTag  string `json:"image_tag"`
-  ImageID   string `json:"-"`
+	ImageID   string `json:"-"`
 }
 
 // DesiredSystemdUnit contains information about a SystemD unit managed by the coordinator.
 type DesiredSystemdUnit struct {
-	ID        *int                   `json:"id,omitempty"`
-	Path      string                 `json:"path"`
-	Type      UnitType               `json:"type"`
+	ID        *int                    `json:"id,omitempty"`
+	Path      string                  `json:"path"`
+	Type      UnitType                `json:"type"`
 	Container *DesiredDockerContainer `json:"container,omitempty"`
-	Secrets   []string               `json:"secrets"`
-	Env       map[string]string      `json:"env"`
-	Ports     map[int]int            `json:"ports"`
-	Volumes   map[string]string      `json:"volumes"`
-	Schedule  string                 `json:"calendar,omitempty"`
+	Secrets   []string                `json:"secrets"`
+	Env       map[string]string       `json:"env"`
+	Ports     map[int]int             `json:"ports"`
+	Volumes   map[string]string       `json:"volumes"`
+	Schedule  string                  `json:"calendar,omitempty"`
 }
 
 func (session Session) readDesiredUnits(whereClause string, queryArgs ...interface{}) ([]DesiredSystemdUnit, error) {
-	var db = session.db
+	var (
+		db = session.db
+		log = session.Log
+	)
 
 	unitRows, err := db.Query(`
     	SELECT
@@ -270,9 +273,9 @@ func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
 	}
 
 	var (
-		containerName = ""
+		containerName      = ""
 		containerImageName = ""
-		containerImageTag = ""
+		containerImageTag  = ""
 	)
 	if unit.Container != nil {
 		containerName = unit.Container.Name
@@ -353,16 +356,16 @@ func (unit DesiredSystemdUnit) UnitName() string {
 // from appearing in JSON output as "null".
 func (unit *DesiredSystemdUnit) normalizeNils() {
 	if unit.Secrets == nil {
-		unit.Secrets = make([]string, 0);
+		unit.Secrets = make([]string, 0)
 	}
 	if unit.Env == nil {
-		unit.Env = make(map[string]string, 0);
+		unit.Env = make(map[string]string, 0)
 	}
 	if unit.Ports == nil {
-		unit.Ports = make(map[int]int, 0);
+		unit.Ports = make(map[int]int, 0)
 	}
 	if unit.Volumes == nil {
-		unit.Volumes = make(map[string]string, 0);
+		unit.Volumes = make(map[string]string, 0)
 	}
 }
 
@@ -404,7 +407,7 @@ func (builder *DesiredSystemdUnitBuilder) validate() error {
 		}
 
 		if !strings.HasPrefix(builder.unit.Container.ImageName, "quay.io/smashwilson/az-") {
-			log.WithField("imageName", builder.unit.Container.ImageName).Warn("Attempt to create desired unit with invalid container image.")
+			logrus.WithField("imageName", builder.unit.Container.ImageName).Warn("Attempt to create desired unit with invalid container image.")
 			return errors.New("invalid container image name")
 		}
 
@@ -440,12 +443,12 @@ func (builder *DesiredSystemdUnitBuilder) Path(path string) error {
 	dirName, fileName := filepath.Split(path)
 
 	if dirName != "/etc/systemd/system/" {
-		log.WithField("path", path).Warn("Attempt to create desired unit file in invalid directory.")
+		logrus.WithField("path", path).Warn("Attempt to create desired unit file in invalid directory.")
 		return errors.New("attempt to create desired unit in invalid directory")
 	}
 
 	if !strings.HasPrefix(fileName, "az-") {
-		log.WithField("path", path).Warn("Attempt to create desired unit file with invalid prefix.")
+		logrus.WithField("path", path).Warn("Attempt to create desired unit file with invalid prefix.")
 		return errors.New("Attempt to create desired unit with invalid filename")
 	}
 
@@ -455,9 +458,9 @@ func (builder *DesiredSystemdUnitBuilder) Path(path string) error {
 
 // Type populates the template type.
 func (builder *DesiredSystemdUnitBuilder) Type(tp UnitType) error {
-  if _, ok := namesByType[tp]; !ok {
-    return fmt.Errorf("Invalid type: %d", tp)
-  }
+	if _, ok := namesByType[tp]; !ok {
+		return fmt.Errorf("Invalid type: %d", tp)
+	}
 	builder.unit.Type = tp
 	return nil
 }
@@ -467,9 +470,9 @@ func (builder *DesiredSystemdUnitBuilder) Type(tp UnitType) error {
 // a container is expected to be set or not.
 func (builder *DesiredSystemdUnitBuilder) Container(imageName string, imageTag string, name string) error {
 	builder.unit.Container = &DesiredDockerContainer{
-		Name: name,
+		Name:      name,
 		ImageName: imageName,
-		ImageTag: imageTag,
+		ImageTag:  imageTag,
 	}
 	return nil
 }

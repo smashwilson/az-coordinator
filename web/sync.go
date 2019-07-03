@@ -14,12 +14,14 @@ type syncReport struct {
 	ts      time.Time
 	elapsed time.Duration
 	message string
+	fields  log.Fields
 }
 
 type syncReportResponse struct {
-	Timestamp int64  `json:"timestamp"`
-	Elapsed   int64  `json:"elapsed"`
-	Message   string `json:"message"`
+	Timestamp int64      `json:"timestamp"`
+	Elapsed   int64      `json:"elapsed"`
+	Message   string     `json:"message"`
+	Fields    log.Fields `json:"fields"`
 }
 
 type syncProgressResponse struct {
@@ -86,6 +88,7 @@ func (p *syncProgress) response() syncProgressResponse {
 			Timestamp: r.ts.Unix(),
 			Elapsed:   r.elapsed.Nanoseconds() / 1000000,
 			Message:   r.message,
+			Fields:    r.fields,
 		}
 	}
 
@@ -102,35 +105,41 @@ func (p *syncProgress) response() syncProgressResponse {
 	}
 }
 
-type syncReporter struct {
+type syncHook struct {
 	progress *syncProgress
 	lastTs   time.Time
 }
 
-func (r *syncReporter) Report(description string) {
-	ts := time.Now()
+func (h *syncHook) Levels() []log.Level {
+	return log.AllLevels
+}
+
+func (h *syncHook) Fire(entry *log.Entry) error {
 	var elapsed time.Duration
-	if !r.lastTs.IsZero() {
-		elapsed = ts.Sub(r.lastTs)
+	if !h.lastTs.IsZero() {
+		elapsed = entry.Time.Sub(h.lastTs)
 	}
 
 	report := syncReport{
-		ts:      ts,
+		ts:      entry.Time,
 		elapsed: elapsed,
-		message: description,
+		message: entry.Message,
+		fields:  entry.Data,
 	}
-	r.lastTs = ts
+	h.lastTs = entry.Time
+	h.progress.appendReport(report)
 
-	r.progress.appendReport(report)
+	return nil
 }
 
 func (s *Server) performSync() {
-	reporter := state.MakeCompositeReporter(
-		&syncReporter{progress: s.currentSync},
-		state.LogProgressReporter{},
-	)
+	logger := log.New()
+	logger.SetLevel(log.TraceLevel)
+	logger.AddHook(&syncHook{
+		progress: s.currentSync,
+	})
 
-	session, err := s.newSession()
+	session, err := s.newLoggedSession(logger)
 	if err != nil {
 		log.WithError(err).Error("Unable to establish session.")
 		s.currentSync.setErrors([]error{err})
@@ -138,10 +147,10 @@ func (s *Server) performSync() {
 	}
 	defer session.Close()
 
-	delta, errs := session.Synchronize(state.SyncSettings{Reporter: reporter})
+	delta, errs := session.Synchronize(state.SyncSettings{})
 	if len(errs) > 0 {
 		for _, err := range errs {
-			log.WithError(err).Warn("Synchronization error.")
+			session.Log.WithError(err).Warn("Synchronization error.")
 		}
 		s.currentSync.setErrors(errs)
 		return

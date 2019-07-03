@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/smashwilson/az-coordinator/state"
 )
 
 func (s Server) handleDiffRoot(w http.ResponseWriter, r *http.Request) {
@@ -15,7 +14,7 @@ func (s Server) handleDiffRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
-	session, err := state.NewSession(s.db, s.ring, s.opts.DockerAPIVersion)
+	session, err := s.newSession()
 	if err != nil {
 		log.WithError(err).Error("Unable to establish a session.")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -26,7 +25,7 @@ func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
 
 	actual, err := session.ReadActualState()
 	if err != nil {
-		log.WithError(err).Error("Unable to load the actual system state.")
+		session.Log.WithError(err).Error("Unable to load the actual system state.")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to load the actual system state."))
 		return
@@ -34,14 +33,14 @@ func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
 
 	desired, err := session.ReadDesiredState()
 	if err != nil {
-		log.WithError(err).Error("Unable to load the desired system state.")
+		session.Log.WithError(err).Error("Unable to load the desired system state.")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to load the desired system state."))
 		return
 	}
 
 	if err = desired.ReadImages(session); err != nil {
-		log.WithError(err).Error("Unable to read current container images.")
+		session.Log.WithError(err).Error("Unable to read current container images.")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to read current container images."))
 		return
@@ -49,7 +48,7 @@ func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
 
 	delta := session.Between(desired, actual)
 	if err = json.NewEncoder(w).Encode(&delta); err != nil {
-		log.WithError(err).Error("Unable to serialize JSON.")
+		session.Log.WithError(err).Error("Unable to serialize JSON.")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to serialize JSON"))
 		return
