@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/docker/docker/client"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 // Delta is a JSON-serializable structure enumerating the changes necessary to bring the actual system state
@@ -30,6 +30,8 @@ type Delta struct {
 // state to the desired state.
 func (session *Session) Between(desired *DesiredState, actual *ActualState) Delta {
 	var (
+		log = session.Log
+
 		unitsToAdd     = make([]DesiredSystemdUnit, 0)
 		unitsToChange  = make([]DesiredSystemdUnit, 0)
 		unitsToRestart = make([]DesiredSystemdUnit, 0)
@@ -90,7 +92,7 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 			if err != nil {
 				if client.IsErrNotFound(err) {
 					// It's not running. Definitely restart the thing.
-					log.WithFields(log.Fields{
+					log.WithFields(logrus.Fields{
 						"unitName":      actual.UnitName(),
 						"containerName": desired.Container.Name,
 					}).Debug("Container is not running.")
@@ -103,7 +105,7 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 
 			if container.Image != desired.Container.ImageID {
 				// A newer image has been pulled. Restart the unit to pick it up.
-				log.WithFields(log.Fields{
+				log.WithFields(logrus.Fields{
 					"unitName":       actual.UnitName(),
 					"containerName":  desired.Container.Name,
 					"desiredImageID": desired.Container.ImageID,
@@ -117,7 +119,7 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 			for hostPath := range desired.Volumes {
 				if _, ok := fileContentByPath[hostPath]; ok {
 					// A mounted file has been written. Restart the unit to pick it up.
-					log.WithFields(log.Fields{
+					log.WithFields(logrus.Fields{
 						"unitName":        actual.UnitName(),
 						"mountedFilePath": hostPath,
 					}).Debug("Mounted volume file has been changed.")
@@ -172,6 +174,7 @@ func (d Delta) Apply(uid, gid int) []error {
 	var (
 		errs         = make([]error, 0)
 		session      = d.session
+		log = session.Log
 		needsReload  = false
 		restartUnits = make([]string, 0, len(d.UnitsToChange)+len(d.UnitsToRestart))
 	)
@@ -189,7 +192,7 @@ func (d Delta) Apply(uid, gid int) []error {
 				errs = append(errs, err)
 				continue
 			}
-			log.WithFields(log.Fields{
+			log.WithFields(logrus.Fields{
 				"dirPath": dir,
 				"uid":     uid,
 				"gid":     gid,
@@ -207,7 +210,7 @@ func (d Delta) Apply(uid, gid int) []error {
 				errs = append(errs, err)
 				continue
 			}
-			log.WithFields(log.Fields{
+			log.WithFields(logrus.Fields{
 				"filePath": filePath,
 				"uid":      uid,
 				"gid":      gid,
@@ -226,7 +229,7 @@ func (d Delta) Apply(uid, gid int) []error {
 		errs = append(errs, session.WriteUnit(unit, f)...)
 		f.Close()
 
-		log.WithFields(log.Fields{
+		log.WithFields(logrus.Fields{
 			"unitName":     unit.UnitName(),
 			"unitFilePath": unit.Path,
 		}).Info("Unit file created.")
@@ -237,7 +240,7 @@ func (d Delta) Apply(uid, gid int) []error {
 				continue
 			}
 
-			log.WithFields(log.Fields{
+			log.WithFields(logrus.Fields{
 				"unitFilePath": unit.Path,
 				"uid":          uid,
 				"gid":          gid,
@@ -258,7 +261,7 @@ func (d Delta) Apply(uid, gid int) []error {
 		errs = append(errs, d.session.WriteUnit(unit, f)...)
 		f.Close()
 
-		log.WithFields(log.Fields{
+		log.WithFields(logrus.Fields{
 			"unitName":     unit.UnitName(),
 			"unitFilePath": unit.Path,
 		}).Info("Unit file modified.")
@@ -269,7 +272,7 @@ func (d Delta) Apply(uid, gid int) []error {
 				continue
 			}
 
-			log.WithFields(log.Fields{
+			log.WithFields(logrus.Fields{
 				"unitFilePath": unit.Path,
 				"uid":          uid,
 				"gid":          gid,

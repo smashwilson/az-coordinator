@@ -11,7 +11,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 // UnitType is an enumeration used to choose which template should be used to create a DesiredSystemdUnit's unit
@@ -101,7 +101,10 @@ type DesiredSystemdUnit struct {
 }
 
 func (session Session) readDesiredUnits(whereClause string, queryArgs ...interface{}) ([]DesiredSystemdUnit, error) {
-	var db = session.db
+	var (
+		db = session.db
+		log = session.Log
+	)
 
 	unitRows, err := db.Query(`
     	SELECT
@@ -404,7 +407,7 @@ func (builder *DesiredSystemdUnitBuilder) validate() error {
 		}
 
 		if !strings.HasPrefix(builder.unit.Container.ImageName, "quay.io/smashwilson/az-") {
-			log.WithField("imageName", builder.unit.Container.ImageName).Warn("Attempt to create desired unit with invalid container image.")
+			logrus.WithField("imageName", builder.unit.Container.ImageName).Warn("Attempt to create desired unit with invalid container image.")
 			return errors.New("invalid container image name")
 		}
 
@@ -440,12 +443,12 @@ func (builder *DesiredSystemdUnitBuilder) Path(path string) error {
 	dirName, fileName := filepath.Split(path)
 
 	if dirName != "/etc/systemd/system/" {
-		log.WithField("path", path).Warn("Attempt to create desired unit file in invalid directory.")
+		logrus.WithField("path", path).Warn("Attempt to create desired unit file in invalid directory.")
 		return errors.New("attempt to create desired unit in invalid directory")
 	}
 
 	if !strings.HasPrefix(fileName, "az-") {
-		log.WithField("path", path).Warn("Attempt to create desired unit file with invalid prefix.")
+		logrus.WithField("path", path).Warn("Attempt to create desired unit file with invalid prefix.")
 		return errors.New("Attempt to create desired unit with invalid filename")
 	}
 

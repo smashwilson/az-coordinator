@@ -3,8 +3,6 @@ package state
 import (
 	"io/ioutil"
 	"path"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // ActualState represents a view of SystemD units and files presently on the host as of the time ReadActualState() is called.
@@ -31,6 +29,7 @@ func (session Session) ReadActualState() (*ActualState, error) {
 	var (
 		conn    = session.conn
 		secrets = session.secrets
+		log = session.Log
 	)
 
 	listedUnits, err := conn.ListUnitFilesByPatterns(nil, []string{"az*"})
