@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"regexp"
 
 	"github.com/coreos/go-systemd/dbus"
 	"github.com/docker/docker/api/types"
@@ -91,6 +92,11 @@ func (s Session) PullAllImages(state DesiredState) []error {
 	return errs
 }
 
+var (
+	rxUpToDate = regexp.MustCompile(`Status: Image is up to date`)
+	rxDownloadedNewer = regexp.MustCompile(`Status: Downloaded newer image`)
+)
+
 func (s Session) pullImage(ref string, done chan<- error) {
 	progress, err := s.cli.ImagePull(context.Background(), ref, types.ImagePullOptions{})
 	if err != nil {
@@ -104,7 +110,14 @@ func (s Session) pullImage(ref string, done chan<- error) {
 		done <- err
 		return
 	}
-	s.Log.WithField("ref", ref).Debugf("ImagePull payload:\n%s\n---\n", payload)
+
+	if rxUpToDate.Match(payload) {
+		s.Log.WithField("ref", ref).Debug("Container image already current.")
+	} else if rxDownloadedNewer.Match(payload) {
+		s.Log.WithField("ref", ref).Info("Container image updated.")
+	} else {
+		s.Log.WithField("ref", ref).Warningf("Unrecognized ImagePull payload:\n%s\n---\n", payload)
+	}
 
 	done <- nil
 }
