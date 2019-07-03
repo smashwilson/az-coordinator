@@ -49,10 +49,10 @@ func (s Server) Listen() error {
 }
 
 var allowedMethods = map[string]bool{
-	"GET": true,
-	"POST": true,
-	"PUT": true,
-	"DELETE": true,
+	"GET":     true,
+	"POST":    true,
+	"PUT":     true,
+	"DELETE":  true,
 	"OPTIONS": true,
 }
 
@@ -68,11 +68,11 @@ func (s Server) wrap(handler func(http.ResponseWriter, *http.Request), protected
 	return func(w http.ResponseWriter, r *http.Request) {
 		username, password, ok := r.BasicAuth()
 		log.WithFields(log.Fields{
-			"method": r.Method,
+			"method":   r.Method,
 			"username": username,
 			"password": password,
-			"path": r.URL.Path,
-			"headers": r.Header,
+			"path":     r.URL.Path,
+			"headers":  r.Header,
 		}).Debug("Request.")
 
 		// CORS preflight requests
@@ -118,7 +118,11 @@ func (s Server) methods(w http.ResponseWriter, r *http.Request, handlers methodH
 }
 
 func (s Server) newSession() (*state.Session, error) {
-	return state.NewSession(s.db, s.ring, s.opts.DockerAPIVersion)
+	return s.newLoggedSession(log.StandardLogger())
+}
+
+func (s Server) newLoggedSession(logger *log.Logger) (*state.Session, error) {
+	return state.NewSession(s.db, s.ring, s.opts.DockerAPIVersion, logger)
 }
 
 func extractID(rx *regexp.Regexp, w http.ResponseWriter, r *http.Request) (string, bool) {

@@ -57,7 +57,7 @@ func prepare(n needs) results {
 
 	if n.session {
 		log.Info("Establishing session.")
-		r.session, err = state.NewSession(r.db, r.ring, r.options.DockerAPIVersion)
+		r.session, err = state.NewSession(r.db, r.ring, r.options.DockerAPIVersion, log.StandardLogger())
 		if err != nil {
 			log.WithError(err).Fatal("Unable to create session.")
 		}

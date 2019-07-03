@@ -74,14 +74,14 @@ func (s Server) handleCreateDesired(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type createRequest struct {
-		Path      string                 `json:"path"`
-		Type      state.UnitType         `json:"type"`
+		Path      string                  `json:"path"`
+		Type      state.UnitType          `json:"type"`
 		Container *createRequestContainer `json:"container,omitempty"`
-		Secrets   []string               `json:"secrets"`
-		Env       map[string]string      `json:"env"`
-		Ports     map[int]int            `json:"ports"`
-		Volumes   map[string]string      `json:"volumes"`
-		Schedule  string                 `json:"calendar"`
+		Secrets   []string                `json:"secrets"`
+		Env       map[string]string       `json:"env"`
+		Ports     map[int]int             `json:"ports"`
+		Volumes   map[string]string       `json:"volumes"`
+		Schedule  string                  `json:"calendar"`
 	}
 
 	session, err := s.newSession()

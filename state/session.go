@@ -10,9 +10,9 @@ import (
 
 	"github.com/coreos/go-systemd/dbus"
 	"github.com/docker/docker/api/types"
-  "github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/smashwilson/az-coordinator/secrets"
 )
 
@@ -23,10 +23,15 @@ type Session struct {
 	cli     *client.Client
 	conn    *dbus.Conn
 	secrets *secrets.Bag
+	Log     *logrus.Logger
 }
 
 // NewSession establishes all of the connections necessary to perform an operation.
-func NewSession(db *sql.DB, ring *secrets.DecoderRing, dockerAPIVersion string) (*Session, error) {
+func NewSession(db *sql.DB, ring *secrets.DecoderRing, dockerAPIVersion string, log *logrus.Logger) (*Session, error) {
+	if log == nil {
+		log = logrus.StandardLogger()
+	}
+
 	log.Debug("Creating Docker client.")
 	cli, err := client.NewClientWithOpts(client.WithVersion(dockerAPIVersion), client.FromEnv)
 	if err != nil {
@@ -51,6 +56,7 @@ func NewSession(db *sql.DB, ring *secrets.DecoderRing, dockerAPIVersion string) 
 		cli:     cli,
 		conn:    conn,
 		secrets: secrets,
+		Log:     log,
 	}, nil
 }
 
@@ -65,11 +71,11 @@ func (s Session) PullAllImages(state DesiredState) []error {
 		if unit.Container != nil && len(unit.Container.ImageName) > 0 && len(unit.Container.ImageTag) > 0 {
 			ref := unit.Container.ImageName + ":" + unit.Container.ImageTag
 			imageRefs[ref] = true
-			log.WithField("ref", ref).Debug("Scheduling docker pull.")
+			s.Log.WithField("ref", ref).Debug("Scheduling docker pull.")
 		}
 	}
 
-	log.WithField("count", len(imageRefs)).Debug("Beginning docker pulls.")
+	s.Log.WithField("count", len(imageRefs)).Debug("Beginning docker pulls.")
 	results := make(chan error, len(imageRefs))
 	for ref := range imageRefs {
 		go s.pullImage(ref, results)
@@ -80,7 +86,7 @@ func (s Session) PullAllImages(state DesiredState) []error {
 			errs = append(errs, err)
 		}
 	}
-	log.WithField("count", len(imageRefs)).Debug("Docker pulls complete.")
+	s.Log.WithField("count", len(imageRefs)).Debug("Docker pulls complete.")
 
 	return errs
 }
@@ -98,44 +104,44 @@ func (s Session) pullImage(ref string, done chan<- error) {
 		done <- err
 		return
 	}
-	log.WithField("ref", ref).Debugf("ImagePull payload:\n%s\n---\n", payload)
+	s.Log.WithField("ref", ref).Debugf("ImagePull payload:\n%s\n---\n", payload)
 
 	done <- nil
 }
 
 // CreateNetwork ensures that the expected Docker backplane network is present.
 func (s Session) CreateNetwork() error {
-  networks, err := s.cli.NetworkList(context.Background(), types.NetworkListOptions{})
-  if err != nil {
-    return err
-  }
+	networks, err := s.cli.NetworkList(context.Background(), types.NetworkListOptions{})
+	if err != nil {
+		return err
+	}
 
-  for _, network := range networks {
-    if network.Name == "local" {
-      // Network already exists
-      log.WithFields(log.Fields{
-        "networkID": network.ID,
-        "networkName": network.Name,
-        "networkDriver": network.Driver,
-      }).Info("Network already exists.")
-      return nil
-    }
-  }
+	for _, network := range networks {
+		if network.Name == "local" {
+			// Network already exists
+			s.Log.WithFields(logrus.Fields{
+				"networkID":     network.ID,
+				"networkName":   network.Name,
+				"networkDriver": network.Driver,
+			}).Info("Network already exists.")
+			return nil
+		}
+	}
 
-  response, err := s.cli.NetworkCreate(context.Background(), "local", types.NetworkCreate{
-    CheckDuplicate: true,
-    Driver: "bridge",
-    IPAM: &network.IPAM{
-      Driver: "default",
-    },
-    Internal: false,
-  })
-  if err != nil {
-    return err
-  }
+	response, err := s.cli.NetworkCreate(context.Background(), "local", types.NetworkCreate{
+		CheckDuplicate: true,
+		Driver:         "bridge",
+		IPAM: &network.IPAM{
+			Driver: "default",
+		},
+		Internal: false,
+	})
+	if err != nil {
+		return err
+	}
 
-  log.WithField("networkID", response.ID).Debug("Network created.")
-  return nil
+	s.Log.WithField("networkID", response.ID).Debug("Network created.")
+	return nil
 }
 
 // ValidateSecretKeys returns an error if any of the keys requested in a set are not loaded in the
@@ -189,19 +195,13 @@ func (s Session) DeleteSecrets(keys []string) error {
 
 // SyncSettings configures synchronization behavior.
 type SyncSettings struct {
-	Reporter ProgressReporter
-	UID      int
-	GID      int
+	UID int
+	GID int
 }
 
 // Synchronize brings local Docker images up to date, then reads desired and actual state, computes a
 // Delta between them, and applies it. The applied Delta is returned.
 func (s *Session) Synchronize(settings SyncSettings) (*Delta, []error) {
-	var reporter ProgressReporter = LogProgressReporter{}
-	if settings.Reporter != nil {
-		reporter = settings.Reporter
-	}
-
 	uid := -1
 	gid := -1
 	if settings.UID != 0 {
@@ -211,29 +211,29 @@ func (s *Session) Synchronize(settings SyncSettings) (*Delta, []error) {
 		gid = settings.GID
 	}
 
-	reporter.Report("Reading desired state.")
+	s.Log.Info("Reading desired state.")
 	desired, err := s.ReadDesiredState()
 	if err != nil {
 		return nil, []error{err}
 	}
 
-	reporter.Report("Pulling referenced images.")
+	s.Log.Info("Pulling referenced images.")
 	if errs := s.PullAllImages(*desired); len(errs) > 0 {
 		return nil, append(errs, errors.New("pull errors"))
 	}
 
-	reporter.Report("Reading updated docker images.")
+	s.Log.Info("Reading updated docker images.")
 	if err = desired.ReadImages(s); err != nil {
 		return nil, []error{err, errors.New("unable to pull docker images")}
 	}
 
-	reporter.Report("Reading actual state.")
+	s.Log.Info("Reading actual state.")
 	actual, err := s.ReadActualState()
 	if err != nil {
 		return nil, []error{err, errors.New("unable to read system state")}
 	}
 
-	reporter.Report("Computing delta.")
+	s.Log.Info("Computing delta.")
 	delta := s.Between(desired, actual)
 
 	if errs := delta.Apply(uid, gid); len(errs) > 0 {
