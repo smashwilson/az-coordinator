@@ -1,4 +1,7 @@
-on: push
+on:
+  push:
+    tags:
+      - '*'
 name: Release
 jobs:
   onlyTags:
@@ -6,10 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
-    - name: Only tags
-      uses: actions/bin/filter@master
-      with:
-        args: tag
     - name: Goreleaser
       uses: docker://goreleaser/goreleaser
       env:
