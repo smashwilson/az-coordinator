@@ -1,0 +1,18 @@
+on: push
+name: Release
+jobs:
+  onlyTags:
+    name: Only tags
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: Only tags
+      uses: actions/bin/filter@master
+      with:
+        args: tag
+    - name: Goreleaser
+      uses: docker://goreleaser/goreleaser
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        args: release
