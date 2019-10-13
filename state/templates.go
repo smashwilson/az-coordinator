@@ -26,6 +26,10 @@ Restart=always
 ExecStartPre=-/usr/bin/docker kill {{ .U.Container.Name }}
 ExecStartPre=-/usr/bin/docker rm {{ .U.Container.Name }}
 ExecStart=/usr/bin/docker run \
+  --log-driver=awslogs \
+  --log-opt awslogs-region=us-east-1 \
+  --log-opt awslogs-group={{ .UnitName }}.{{ .U.Container.ImageTag }} \
+  --log-opt awslogs-create-group=true \
   --network local \
 {{- range $key, $value := .Env }}
   --env {{ $key }}="{{ $value }}" \
@@ -52,6 +56,10 @@ Requires=docker.service
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/docker run --rm \
+  --log-driver=awslogs \
+  --log-opt awslogs-region=us-east-1 \
+  --log-opt awslogs-group={{ .UnitName }}.{{ .U.Container.ImageTag }} \
+  --log-opt awslogs-create-group=true \
   --network local \
 {{- range $key, $value := .Env }}
   --env {{ $key }}="{{ $value }}" \
