@@ -11,6 +11,7 @@ import (
 
 	"github.com/coreos/go-systemd/dbus"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
@@ -157,6 +158,29 @@ func (s Session) CreateNetwork() error {
 	return nil
 }
 
+// Prune removes stopped containers and unused container images to reclaim disk space.
+func (s Session) Prune() {
+  cr, err := s.cli.ContainersPrune(context.Background(), filters.NewArgs())
+  if err != nil {
+    s.Log.WithError(err).Warning("Unable to prune containers.")
+  } else {
+    s.Log.WithFields(logrus.Fields{
+      "containers": len(cr.ContainersDeleted),
+      "spaceReclained": cr.SpaceReclaimed,
+    }).Debug("Containers removed.")
+  }
+
+  ir, err := s.cli.ImagesPrune(context.Background(), filters.NewArgs())
+  if err != nil {
+    s.Log.WithError(err).Warning("Unable to prune images.")
+  } else {
+    s.Log.WithFields(logrus.Fields{
+      "images": len(ir.ImagesDeleted),
+      "spaceReclaimed": cr.SpaceReclaimed,
+    }).Debug("Images removed.")
+  }
+}
+
 // ValidateSecretKeys returns an error if any of the keys requested in a set are not loaded in the
 // session's SecretBag and nil if all are present.
 func (s Session) ValidateSecretKeys(secretKeys []string) error {
@@ -252,6 +276,9 @@ func (s *Session) Synchronize(settings SyncSettings) (*Delta, []error) {
 	if errs := delta.Apply(uid, gid); len(errs) > 0 {
 		return nil, append(errs, errors.New("unable to apply delta"))
 	}
+
+  s.Log.Info("Pruning unused docker data.")
+  s.Prune()
 
 	return &delta, nil
 }
