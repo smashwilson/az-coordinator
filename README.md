@@ -2,6 +2,8 @@
 
 ## Or: "Oops, I Wrote A Docker Container Orchestration Engine"
 
+![status badge](https://github.com/smashwilson/az-coordinator/workflows/ci/badge.svg)
+
 This is a solution to a very specific problem that I have. Namely:
 
 * I keep an AWS server running to host side-projects that need a process to run somewhere. Mostly this is [@pushbot](https://github.com/smashwilson/pushbot).
