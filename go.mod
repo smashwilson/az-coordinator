@@ -16,6 +16,8 @@ require (
 	github.com/google/go-cmp v0.3.0 // indirect
 	github.com/gorilla/mux v1.7.2 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
+	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
+	github.com/kdar/logrus-cloudwatchlogs v0.0.0-20190402042352-9a67b2f09ba3
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2
 	github.com/lib/pq v1.0.0
 	github.com/morikuni/aec v0.0.0-20170113033406-39771216ff4c // indirect
