@@ -7,6 +7,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/smashwilson/az-coordinator/slack"
 	"github.com/smashwilson/az-coordinator/state"
 )
 
@@ -148,6 +149,10 @@ func (s *Server) performSync() {
 	defer session.Close()
 
 	delta, errs := session.Synchronize(state.SyncSettings{})
+	if len(s.opts.SlackWebhookURL) > 0 {
+		slack.ReportSync(s.opts.SlackWebhookURL, delta, errs)
+	}
+
 	if len(errs) > 0 {
 		for _, err := range errs {
 			session.Log.WithError(err).Warn("Synchronization error.")
