@@ -59,13 +59,18 @@ func (payload slackPayload) render() ([]byte, error) {
 	return json.Marshal(payload)
 }
 
-func generatePayload(d state.Delta, errs []error) slackPayload {
-	payload := newSlackPayload(len(d.UpdatedContainers) + len(errs))
+func generatePayload(d *state.Delta, errs []error) slackPayload {
+	var updatedContainers []state.UpdatedContainer
+	if d != nil {
+		updatedContainers = d.UpdatedContainers
+	}
 
-	if len(errs) > 0 && len(d.UpdatedContainers) > 0 {
+	payload := newSlackPayload(len(updatedContainers) + len(errs))
+
+	if len(errs) > 0 && len(updatedContainers) > 0 {
 		payload.appendMarkdownBlock(":warning: *Partially successful deployment.*")
 		payload.Text = "Partially successful deployment."
-	} else if len(d.UpdatedContainers) > 0 {
+	} else if len(updatedContainers) > 0 {
 		payload.appendMarkdownBlock(":recycle: *Successful deployment.*")
 		payload.Text = "Successful deployment."
 	} else if len(errs) > 0 {
@@ -80,14 +85,14 @@ func generatePayload(d state.Delta, errs []error) slackPayload {
 		}
 	}
 
-	if len(d.UpdatedContainers) > 0 {
+	if len(updatedContainers) > 0 {
 		payload.appendDivider()
-		for _, container := range d.UpdatedContainers {
+		for _, container := range updatedContainers {
 			payload.appendContainerBlock(container)
 		}
 	}
 
-	if len(errs) == 0 && len(d.UpdatedContainers) == 0 {
+	if len(errs) == 0 && len(updatedContainers) == 0 {
 		payload.appendMarkdownBlock("_Nothing changed._")
 	}
 
@@ -116,7 +121,7 @@ func sendPayload(payload slackPayload, webhookURL string) error {
 }
 
 // ReportSync reports the result of a state sync operation to a Slack webhook.
-func ReportSync(webhookURL string, d state.Delta, errs []error) {
+func ReportSync(webhookURL string, d *state.Delta, errs []error) {
 	payload := generatePayload(d, errs)
 	err := sendPayload(payload, webhookURL)
 	if err != nil {
