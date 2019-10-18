@@ -19,6 +19,7 @@ type Options struct {
 	AWSRegion        string `json:"aws_region"`
 	DockerAPIVersion string `json:"docker_api_version"`
 	AllowedOrigin    string `json:"allowed_origin"`
+	SlackWebhookURL  string `json:"slack_webhook_url"`
 
 	OptionsPath string `json:"-"`
 }
