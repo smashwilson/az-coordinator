@@ -63,13 +63,13 @@ func generatePayload(d state.Delta, errs []error) slackPayload {
 	payload := newSlackPayload(len(d.UpdatedContainers) + len(errs))
 
 	if len(errs) > 0 && len(d.UpdatedContainers) > 0 {
-    payload.appendMarkdownBlock(":warning: *Partially successful deployment.*")
+		payload.appendMarkdownBlock(":warning: *Partially successful deployment.*")
 		payload.Text = "Partially successful deployment."
 	} else if len(d.UpdatedContainers) > 0 {
-    payload.appendMarkdownBlock(":recycle: *Successful deployment.*")
+		payload.appendMarkdownBlock(":recycle: *Successful deployment.*")
 		payload.Text = "Successful deployment."
 	} else if len(errs) > 0 {
-    payload.appendMarkdownBlock(":rotating_light: *Failed deployment.*")
+		payload.appendMarkdownBlock(":rotating_light: *Failed deployment.*")
 		payload.Text = "Failed deployment."
 	}
 
@@ -117,9 +117,9 @@ func sendPayload(payload slackPayload, webhookURL string) error {
 
 // ReportSync reports the result of a state sync operation to a Slack webhook.
 func ReportSync(webhookURL string, d state.Delta, errs []error) {
-  payload := generatePayload(d, errs)
-  err := sendPayload(payload, webhookURL)
-  if err != nil {
-    logrus.WithError(err).Warning("Unable to produce payload for Slack webhook.")
-  }
+	payload := generatePayload(d, errs)
+	err := sendPayload(payload, webhookURL)
+	if err != nil {
+		logrus.WithError(err).Warning("Unable to produce payload for Slack webhook.")
+	}
 }
