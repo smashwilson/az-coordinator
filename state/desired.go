@@ -102,7 +102,7 @@ type DesiredSystemdUnit struct {
 
 func (session Session) readDesiredUnits(whereClause string, queryArgs ...interface{}) ([]DesiredSystemdUnit, error) {
 	var (
-		db = session.db
+		db  = session.db
 		log = session.Log
 	)
 
@@ -329,16 +329,16 @@ func (unit DesiredSystemdUnit) Update(session Session) error {
 		return err
 	}
 
-  var (
-    containerName = ""
-    containerImageName = ""
-    containerImageTag = ""
-  )
-  if unit.Container != nil {
-    containerName = unit.Container.Name
-    containerImageName = unit.Container.ImageName
-    containerImageTag = unit.Container.ImageTag
-  }
+	var (
+		containerName      = ""
+		containerImageName = ""
+		containerImageTag  = ""
+	)
+	if unit.Container != nil {
+		containerName = unit.Container.Name
+		containerImageName = unit.Container.ImageName
+		containerImageTag = unit.Container.ImageTag
+	}
 
 	_, err = db.Exec(`
 	UPDATE state_systemd_units
@@ -480,10 +480,10 @@ func (builder *DesiredSystemdUnitBuilder) Type(tp UnitType) error {
 // begin with `quay.io/smashwilson/az-`. If the type has already been set, it is used to validate whether or not
 // a container is expected to be set or not.
 func (builder *DesiredSystemdUnitBuilder) Container(imageName string, imageTag string, name string) error {
-  if len(imageName) == 0 && len(imageTag) == 0 {
-    builder.unit.Container = nil
-    return nil
-  }
+	if len(imageName) == 0 && len(imageTag) == 0 {
+		builder.unit.Container = nil
+		return nil
+	}
 
 	builder.unit.Container = &DesiredDockerContainer{
 		Name:      name,

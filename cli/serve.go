@@ -1,16 +1,16 @@
 package cli
 
 import (
-  "os"
-  "fmt"
-  "time"
-  "io/ioutil"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/kdar/logrus-cloudwatchlogs"
 	log "github.com/sirupsen/logrus"
 	"github.com/smashwilson/az-coordinator/state"
 	"github.com/smashwilson/az-coordinator/web"
-  "github.com/aws/aws-sdk-go/aws"
-  "github.com/kdar/logrus-cloudwatchlogs"
 )
 
 func serve() {
@@ -21,26 +21,26 @@ func serve() {
 		db:      true,
 	})
 
-  if logGroup, ok := os.LookupEnv("AZ_CLOUDWATCH_GROUP"); ok && len(logGroup) > 0 {
-    logStream := fmt.Sprintf("%d.%d", time.Now().Unix(), os.Getpid())
+	if logGroup, ok := os.LookupEnv("AZ_CLOUDWATCH_GROUP"); ok && len(logGroup) > 0 {
+		logStream := fmt.Sprintf("%d.%d", time.Now().Unix(), os.Getpid())
 
-    log.WithFields(log.Fields{
-      "region": r.options.AWSRegion,
-      "logGroup": logGroup,
-      "logStream": logStream,
-    }).Info("Initializing AWS logger.")
+		log.WithFields(log.Fields{
+			"region":    r.options.AWSRegion,
+			"logGroup":  logGroup,
+			"logStream": logStream,
+		}).Info("Initializing AWS logger.")
 
-    cfg := aws.NewConfig().WithRegion(r.options.AWSRegion)
-    hook, err := logrus_cloudwatchlogs.NewHookWithDuration(logGroup, logStream, cfg, 500 * time.Millisecond)
-    if err != nil {
-      log.WithError(err).Fatal("Unable to create CloudWatch hook.")
-    }
-    log.AddHook(hook)
-    log.SetOutput(ioutil.Discard)
-    log.SetFormatter(&logrus_cloudwatchlogs.DevFormatter{})
+		cfg := aws.NewConfig().WithRegion(r.options.AWSRegion)
+		hook, err := logrus_cloudwatchlogs.NewHookWithDuration(logGroup, logStream, cfg, 500*time.Millisecond)
+		if err != nil {
+			log.WithError(err).Fatal("Unable to create CloudWatch hook.")
+		}
+		log.AddHook(hook)
+		log.SetOutput(ioutil.Discard)
+		log.SetFormatter(&logrus_cloudwatchlogs.DevFormatter{})
 
-    log.Info("Sup, AWS.")
-  }
+		log.Info("Sup, AWS.")
+	}
 
 	log.Info("Performing initial sync.")
 	delta, errs := r.session.Synchronize(state.SyncSettings{})

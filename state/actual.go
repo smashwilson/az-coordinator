@@ -29,7 +29,7 @@ func (session Session) ReadActualState() (*ActualState, error) {
 	var (
 		conn    = session.conn
 		secrets = session.secrets
-		log = session.Log
+		log     = session.Log
 	)
 
 	listedUnits, err := conn.ListUnitFilesByPatterns(nil, []string{"az*"})

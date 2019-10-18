@@ -174,7 +174,7 @@ func (d Delta) Apply(uid, gid int) []error {
 	var (
 		errs         = make([]error, 0)
 		session      = d.session
-		log = session.Log
+		log          = session.Log
 		needsReload  = false
 		restartUnits = make([]string, 0, len(d.UnitsToChange)+len(d.UnitsToRestart))
 	)
