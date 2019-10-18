@@ -92,10 +92,6 @@ func generatePayload(d *state.Delta, errs []error) slackPayload {
 		}
 	}
 
-	if len(errs) == 0 && len(updatedContainers) == 0 {
-		payload.appendMarkdownBlock("_Nothing changed._")
-	}
-
 	return payload
 }
 
@@ -122,6 +118,11 @@ func sendPayload(payload slackPayload, webhookURL string) error {
 
 // ReportSync reports the result of a state sync operation to a Slack webhook.
 func ReportSync(webhookURL string, d *state.Delta, errs []error) {
+	if len(errs) == 0 && (d == nil || len(d.UpdatedContainers) == 0) {
+		logrus.Debug("Nothing to report.")
+		return
+	}
+
 	payload := generatePayload(d, errs)
 	err := sendPayload(payload, webhookURL)
 	if err != nil {
