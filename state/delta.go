@@ -13,6 +13,34 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// UpdatedContainer captures information about a container image that has been modified.
+type UpdatedContainer struct {
+	ImageID    string `json:"image_id"`
+	Repository string `json:"repository"`
+	GitOID     string `json:"git_oid"`
+	GitRef     string `json:"git_ref"`
+}
+
+// RepositoryURL generates a URL to the GitHub repository that created this container.
+func (c UpdatedContainer) RepositoryURL() string {
+	return fmt.Sprintf("https://github.com/%s", c.Repository)
+}
+
+// CommitURL generates a permalink to the git commit on GitHub.
+func (c UpdatedContainer) CommitURL() string {
+	return fmt.Sprintf("https://github.com/%s/commit/%s", c.Repository, c.GitOID)
+}
+
+// BranchURL generates a link to the git branch on GitHub.
+func (c UpdatedContainer) BranchURL() string {
+	return fmt.Sprintf("https://github.com/%s/tree/%s", c.Repository, c.GitRef)
+}
+
+// PullRequestURL generates a link to the open pull request (if any).
+func (c UpdatedContainer) PullRequestURL() string {
+	return fmt.Sprintf("https://github.com/%s/pull/%s", c.Repository, c.GitRef)
+}
+
 // Delta is a JSON-serializable structure enumerating the changes necessary to bring the actual system state
 // in alignment with the desired state.
 type Delta struct {
@@ -21,6 +49,8 @@ type Delta struct {
 	UnitsToRestart []DesiredSystemdUnit `json:"units_to_restart"`
 	UnitsToRemove  []ActualSystemdUnit  `json:"units_to_remove"`
 	FilesToWrite   []string             `json:"files_to_write"`
+
+	UpdatedContainers []UpdatedContainer `json:"updated_containers"`
 
 	fileContent map[string][]byte
 	session     *Session
@@ -37,6 +67,8 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 		unitsToRestart = make([]DesiredSystemdUnit, 0)
 		unitsToRemove  = make([]ActualSystemdUnit, 0)
 		filesToWrite   = make([]string, 0, len(desired.Files))
+
+		updatedContainers = make([]UpdatedContainer, 0)
 
 		fileContentByPath = make(map[string][]byte, len(desired.Files))
 		desiredByName     = make(map[string]DesiredSystemdUnit)
@@ -111,6 +143,23 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 					"desiredImageID": desired.Container.ImageID,
 					"actualImageID":  container.Image,
 				}).Debug("Container image is out of date.")
+
+				gitOid := ""
+				gitRef := ""
+				repository := ""
+				if container.Config != nil {
+					labels := container.Config.Labels
+					gitOid = labels["net.azurefire.commit"]
+					gitRef = labels["net.azurefire.ref"]
+					repository = labels["net.azurefire.repository"]
+				}
+
+				updatedContainers = append(updatedContainers, UpdatedContainer{
+					ImageID:    desired.Container.ImageID,
+					Repository: repository,
+					GitOID:     gitOid,
+					GitRef:     gitRef,
+				})
 				unitsToRestart = append(unitsToRestart, desired)
 				continue
 			}
@@ -148,13 +197,14 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 	}
 
 	return Delta{
-		UnitsToAdd:     unitsToAdd,
-		UnitsToChange:  unitsToChange,
-		UnitsToRestart: unitsToRestart,
-		UnitsToRemove:  unitsToRemove,
-		FilesToWrite:   filesToWrite,
-		fileContent:    fileContentByPath,
-		session:        session,
+		UnitsToAdd:        unitsToAdd,
+		UnitsToChange:     unitsToChange,
+		UnitsToRestart:    unitsToRestart,
+		UnitsToRemove:     unitsToRemove,
+		FilesToWrite:      filesToWrite,
+		UpdatedContainers: updatedContainers,
+		fileContent:       fileContentByPath,
+		session:           session,
 	}
 }
 
