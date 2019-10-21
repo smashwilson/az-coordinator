@@ -99,7 +99,54 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 
 			// Determine if the actual unit needs to be reloaded to match the desired one.
 
-			// Check unit file content first.
+			if desired.Container != nil && desired.Container.Name != "" {
+				// Check the image ID associated with a running container.
+				container, err := session.cli.ContainerInspect(context.Background(), desired.Container.Name)
+				if err != nil {
+					if client.IsErrNotFound(err) {
+						// It's not running. Definitely restart the thing.
+						log.WithFields(logrus.Fields{
+							"unitName":      actual.UnitName(),
+							"containerName": desired.Container.Name,
+						}).Debug("Container is not running.")
+						unitsToRestart = append(unitsToRestart, desired)
+						continue
+					}
+					log.WithError(err).WithField("containerName", desired.Container.Name).Warn("Unable to inspect container.")
+					continue
+				}
+
+				if container.Image != desired.Container.ImageID {
+					// A newer image has been pulled. Restart the unit to pick it up.
+					log.WithFields(logrus.Fields{
+						"unitName":       actual.UnitName(),
+						"containerName":  desired.Container.Name,
+						"desiredImageID": desired.Container.ImageID,
+						"actualImageID":  container.Image,
+					}).Debug("Container image is out of date.")
+
+					gitOid := ""
+					gitRef := ""
+					repository := ""
+					if container.Config != nil {
+						labels := container.Config.Labels
+						gitOid = labels["net.azurefire.commit"]
+						gitRef = labels["net.azurefire.ref"]
+						repository = labels["net.azurefire.repository"]
+					}
+
+					updatedContainers = append(updatedContainers, UpdatedContainer{
+						ImageID:    desired.Container.ImageID,
+						Repository: repository,
+						GitOID:     gitOid,
+						GitRef:     gitRef,
+					})
+					unitsToRestart = append(unitsToRestart, desired)
+					continue
+				}
+			}
+
+			// Check unit file content next.
 			var expected bytes.Buffer
 			if errs := session.WriteUnit(desired, &expected); len(errs) > 0 {
 				for _, err := range errs {
@@ -110,57 +157,6 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 			if !bytes.Equal(expected.Bytes(), actual.Content) {
 				log.WithField("unitName", actual.UnitName()).Debug("Unit content differs.")
 				unitsToChange = append(unitsToChange, desired)
-				continue
-			}
-
-			if desired.Container == nil || desired.Container.Name == "" {
-				// If the desired unit doesn't specify a container name, then the running container will have an automatically
-				// assigned one. Usually this means it's a one-shot.
-				continue
-			}
-
-			// Check the image ID associated with a running container next.
-			container, err := session.cli.ContainerInspect(context.Background(), desired.Container.Name)
-			if err != nil {
-				if client.IsErrNotFound(err) {
-					// It's not running. Definitely restart the thing.
-					log.WithFields(logrus.Fields{
-						"unitName":      actual.UnitName(),
-						"containerName": desired.Container.Name,
-					}).Debug("Container is not running.")
-					unitsToRestart = append(unitsToRestart, desired)
-					continue
-				}
-				log.WithError(err).WithField("containerName", desired.Container.Name).Warn("Unable to inspect container.")
-				continue
-			}
-
-			if container.Image != desired.Container.ImageID {
-				// A newer image has been pulled. Restart the unit to pick it up.
-				log.WithFields(logrus.Fields{
-					"unitName":       actual.UnitName(),
-					"containerName":  desired.Container.Name,
-					"desiredImageID": desired.Container.ImageID,
-					"actualImageID":  container.Image,
-				}).Debug("Container image is out of date.")
-
-				gitOid := ""
-				gitRef := ""
-				repository := ""
-				if container.Config != nil {
-					labels := container.Config.Labels
-					gitOid = labels["net.azurefire.commit"]
-					gitRef = labels["net.azurefire.ref"]
-					repository = labels["net.azurefire.repository"]
-				}
-
-				updatedContainers = append(updatedContainers, UpdatedContainer{
-					ImageID:    desired.Container.ImageID,
-					Repository: repository,
-					GitOID:     gitOid,
-					GitRef:     gitRef,
-				})
-				unitsToRestart = append(unitsToRestart, desired)
 				continue
 			}
 
