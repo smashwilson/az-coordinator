@@ -140,6 +140,8 @@ func (s *Server) performSync() {
 		progress: s.currentSync,
 	})
 
+	s.opts.CloudwatchLogger(logger)
+
 	session, err := s.newLoggedSession(logger)
 	if err != nil {
 		log.WithError(err).Error("Unable to establish session.")

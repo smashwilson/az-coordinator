@@ -20,27 +20,7 @@ func serve() {
 		session: true,
 		db:      true,
 	})
-
-	if logGroup, ok := os.LookupEnv("AZ_CLOUDWATCH_GROUP"); ok && len(logGroup) > 0 {
-		logStream := fmt.Sprintf("%d.%d", time.Now().Unix(), os.Getpid())
-
-		log.WithFields(log.Fields{
-			"region":    r.options.AWSRegion,
-			"logGroup":  logGroup,
-			"logStream": logStream,
-		}).Info("Initializing AWS logger.")
-
-		cfg := aws.NewConfig().WithRegion(r.options.AWSRegion)
-		hook, err := logrus_cloudwatchlogs.NewHookWithDuration(logGroup, logStream, cfg, 500*time.Millisecond)
-		if err != nil {
-			log.WithError(err).Fatal("Unable to create CloudWatch hook.")
-		}
-		log.AddHook(hook)
-		log.SetOutput(ioutil.Discard)
-		log.SetFormatter(&logrus_cloudwatchlogs.DevFormatter{})
-
-		log.Info("Sup, AWS.")
-	}
+	r.options.CloudwatchLogger(log)
 
 	log.Info("Performing initial sync.")
 	delta, errs := r.session.Synchronize(state.SyncSettings{})
