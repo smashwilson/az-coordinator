@@ -1,8 +1,12 @@
 package state
 
 import (
+	"context"
 	"io/ioutil"
 	"path"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/filters"
 )
 
 // ActualState represents a view of SystemD units and files presently on the host as of the time ReadActualState() is called.
@@ -18,6 +22,9 @@ type ActualState struct {
 type ActualSystemdUnit struct {
 	// Path is the path to the source of this unit on disk.
 	Path string `json:"path"`
+
+	// ImageID is the ID of the currently running Docker image.
+	ImageID string `json:"image_id"`
 
 	// Content is the current content of the unit file on disk.
 	Content []byte `json:"-"`
@@ -57,6 +64,45 @@ func (session Session) ReadActualState() (*ActualState, error) {
 	}
 
 	return &ActualState{Units: units, Files: files}, nil
+}
+
+// ReadImages loads ImageIDs where possible by querying pre-pulled Docker images.
+func (state *ActualState) ReadImages(session *Session, desired DesiredState) []error {
+	var (
+		desiredByName = make(map[string]DesiredSystemdUnit)
+		errs          = make([]error, 0)
+	)
+
+	for _, unit := range desired.Units {
+		desiredByName[unit.UnitName()] = unit
+	}
+
+	for i := range state.Units {
+		actual := &state.Units[i]
+		if desired, ok := desiredByName[actual.UnitName()]; ok {
+			if desired.Container == nil {
+				continue
+			}
+
+			imageSummaries, err := session.cli.ImageList(context.Background(), types.ImageListOptions{
+				Filters: filters.NewArgs(filters.Arg("reference", desired.Container.ImageName+":"+desired.Container.ImageTag)),
+			})
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+
+			var highest int64
+			for _, imageSummary := range imageSummaries {
+				if imageSummary.Created > highest {
+					actual.ImageID = imageSummary.ID
+					highest = imageSummary.Created
+				}
+			}
+		}
+	}
+
+	return errs
 }
 
 // UnitName derives the internal name that SystemD uses for a unit from the path to its source file.
