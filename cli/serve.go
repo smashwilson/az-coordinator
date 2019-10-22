@@ -1,13 +1,6 @@
 package cli
 
 import (
-	"fmt"
-	"io/ioutil"
-	"os"
-	"time"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/kdar/logrus-cloudwatchlogs"
 	log "github.com/sirupsen/logrus"
 	"github.com/smashwilson/az-coordinator/state"
 	"github.com/smashwilson/az-coordinator/web"
@@ -20,7 +13,7 @@ func serve() {
 		session: true,
 		db:      true,
 	})
-	r.options.CloudwatchLogger(log)
+	r.options.CloudwatchLogger(log.StandardLogger())
 
 	log.Info("Performing initial sync.")
 	delta, errs := r.session.Synchronize(state.SyncSettings{})
