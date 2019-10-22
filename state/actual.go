@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"path"
 
+  "github.com/docker/docker/client"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 )
@@ -83,6 +84,21 @@ func (state *ActualState) ReadImages(session *Session, desired DesiredState) []e
 			if desired.Container == nil {
 				continue
 			}
+
+      if len(desired.Container.Name) > 0 {
+        // Load the image ID associated with a running container.
+				container, err := session.cli.ContainerInspect(context.Background(), desired.Container.Name)
+        if client.IsErrNotFound(err) {
+          // The container isn't running. Fall back to an image query, because that's the image that will be used
+          // the next time this container starts anyway.
+        } else if err != nil {
+          errs = append(errs, err)
+          continue
+        } else {
+          actual.ImageID = container.Image
+          continue
+        }
+      }
 
 			imageSummaries, err := session.cli.ImageList(context.Background(), types.ImageListOptions{
 				Filters: filters.NewArgs(filters.Arg("reference", desired.Container.ImageName+":"+desired.Container.ImageTag)),
