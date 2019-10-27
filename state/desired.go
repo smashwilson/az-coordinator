@@ -81,10 +81,13 @@ type DesiredState struct {
 
 // DesiredDockerContainer contains information about the Docker container image to be used by a SystemD unit.
 type DesiredDockerContainer struct {
-	Name      string `json:"name,omitempty"`
-	ImageName string `json:"image_name"`
-	ImageTag  string `json:"image_tag"`
-	ImageID   string `json:"-"`
+	Name       string `json:"name,omitempty"`
+	ImageName  string `json:"image_name"`
+	ImageTag   string `json:"image_tag"`
+	ImageID    string `json:"-"`
+	GitOID     string `json:"-"`
+	GitRef     string `json:"-"`
+	Repository string `json:"-"`
 }
 
 // DesiredSystemdUnit contains information about a SystemD unit managed by the coordinator.
@@ -226,6 +229,18 @@ func (state *DesiredState) ReadImages(session *Session) error {
 				unit.Container.ImageID = imageSummary.ID
 				highest = imageSummary.Created
 			}
+		}
+
+		if len(unit.Container.ImageID) > 0 {
+			image, _, err := session.cli.ImageInspectWithRaw(context.Background(), unit.Container.ImageID)
+			if err != nil {
+				return err
+			}
+
+			labels := image.Config.Labels
+			unit.Container.GitOID = labels["net.azurefire.commit"]
+			unit.Container.GitRef = labels["net.azurefire.ref"]
+			unit.Container.Repository = labels["net.azurefire.repository"]
 		}
 	}
 

@@ -254,6 +254,17 @@ func (s *Session) Synchronize(settings SyncSettings) (*Delta, []error) {
 		return nil, []error{err}
 	}
 
+	s.Log.Info("Reading actual state.")
+	actual, err := s.ReadActualState()
+	if err != nil {
+		return nil, []error{err, errors.New("unable to read system state")}
+	}
+
+	s.Log.Info("Reading original docker images.")
+	if errs := actual.ReadImages(s, *desired); len(errs) > 0 {
+		return nil, append(errs, errors.New("unable to read original images"))
+	}
+
 	s.Log.Info("Pulling referenced images.")
 	if errs := s.PullAllImages(*desired); len(errs) > 0 {
 		return nil, append(errs, errors.New("pull errors"))
@@ -262,12 +273,6 @@ func (s *Session) Synchronize(settings SyncSettings) (*Delta, []error) {
 	s.Log.Info("Reading updated docker images.")
 	if err = desired.ReadImages(s); err != nil {
 		return nil, []error{err, errors.New("unable to pull docker images")}
-	}
-
-	s.Log.Info("Reading actual state.")
-	actual, err := s.ReadActualState()
-	if err != nil {
-		return nil, []error{err, errors.New("unable to read system state")}
 	}
 
 	s.Log.Info("Computing delta.")

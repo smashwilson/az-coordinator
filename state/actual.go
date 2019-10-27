@@ -5,9 +5,9 @@ import (
 	"io/ioutil"
 	"path"
 
-  "github.com/docker/docker/client"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
 )
 
 // ActualState represents a view of SystemD units and files presently on the host as of the time ReadActualState() is called.
@@ -85,20 +85,20 @@ func (state *ActualState) ReadImages(session *Session, desired DesiredState) []e
 				continue
 			}
 
-      if len(desired.Container.Name) > 0 {
-        // Load the image ID associated with a running container.
+			if len(desired.Container.Name) > 0 {
+				// Load the image ID associated with a running container.
 				container, err := session.cli.ContainerInspect(context.Background(), desired.Container.Name)
-        if client.IsErrNotFound(err) {
-          // The container isn't running. Fall back to an image query, because that's the image that will be used
-          // the next time this container starts anyway.
-        } else if err != nil {
-          errs = append(errs, err)
-          continue
-        } else {
-          actual.ImageID = container.Image
-          continue
-        }
-      }
+				if client.IsErrNotFound(err) {
+					// The container isn't running. Fall back to an image query, because that's the image that will be used
+					// the next time this container starts anyway.
+				} else if err != nil {
+					errs = append(errs, err)
+					continue
+				} else {
+					actual.ImageID = container.Image
+					continue
+				}
+			}
 
 			imageSummaries, err := session.cli.ImageList(context.Background(), types.ImageListOptions{
 				Filters: filters.NewArgs(filters.Arg("reference", desired.Container.ImageName+":"+desired.Container.ImageTag)),

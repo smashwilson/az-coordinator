@@ -2,24 +2,17 @@ package state
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
 )
 
 // UpdatedContainer captures information about a container image that has been modified.
-type UpdatedContainer struct {
-	ImageID    string `json:"image_id"`
-	Repository string `json:"repository"`
-	GitOID     string `json:"git_oid"`
-	GitRef     string `json:"git_ref"`
-}
+type UpdatedContainer DesiredDockerContainer
 
 // RepositoryURL generates a URL to the GitHub repository that created this container.
 func (c UpdatedContainer) RepositoryURL() string {
@@ -50,7 +43,7 @@ type Delta struct {
 	UnitsToRemove  []ActualSystemdUnit  `json:"units_to_remove"`
 	FilesToWrite   []string             `json:"files_to_write"`
 
-	UpdatedContainers []UpdatedContainer `json:"updated_containers"`
+	UpdatedContainers []UpdatedContainer `json:"-"`
 
 	fileContent map[string][]byte
 	session     *Session
@@ -97,67 +90,27 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 			log.WithField("unitName", actual.UnitName()).Debug("Verifying systemd unit.")
 			desiredRemaining[desired.UnitName()] = false
 
-			// Determine if the actual unit needs to be reloaded to match the desired one.
+			willUpdate := false
+			shouldRestart := false
 
-			if desired.Container != nil && desired.Container.Name != "" {
-				// Check the image ID associated with a running container.
-				container, err := session.cli.ContainerInspect(context.Background(), desired.Container.Name)
-				if err != nil {
-					if client.IsErrNotFound(err) {
-						// It's not running. Definitely restart the thing.
-						log.WithFields(logrus.Fields{
-							"unitName":      actual.UnitName(),
-							"containerName": desired.Container.Name,
-						}).Debug("Container is not running.")
-						unitsToRestart = append(unitsToRestart, desired)
-						continue
-					}
-					log.WithError(err).WithField("containerName", desired.Container.Name).Warn("Unable to inspect container.")
-					continue
-				}
-
-				if container.Image != desired.Container.ImageID {
-					// A newer image has been pulled. Restart the unit to pick it up.
-					log.WithFields(logrus.Fields{
-						"unitName":       actual.UnitName(),
-						"containerName":  desired.Container.Name,
-						"desiredImageID": desired.Container.ImageID,
-						"actualImageID":  container.Image,
-					}).Debug("Container image is out of date.")
-
-					gitOid := ""
-					gitRef := ""
-					repository := ""
-					if container.Config != nil {
-						labels := container.Config.Labels
-						gitOid = labels["net.azurefire.commit"]
-						gitRef = labels["net.azurefire.ref"]
-						repository = labels["net.azurefire.repository"]
-					}
-
-					updatedContainers = append(updatedContainers, UpdatedContainer{
-						ImageID:    desired.Container.ImageID,
-						Repository: repository,
-						GitOID:     gitOid,
-						GitRef:     gitRef,
-					})
-					unitsToRestart = append(unitsToRestart, desired)
-					continue
+			// Determine if the ID of the running Docker container image will change.
+			if desired.Container != nil {
+				if desired.Container.ImageID != actual.ImageID && len(desired.Container.ImageID) > 0 {
+					willUpdate = true
+					shouldRestart = true
 				}
 			}
 
-			// Check unit file content next.
+			// Determine if the actual unit needs to be reloaded to match the desired one.
 			var expected bytes.Buffer
 			if errs := session.WriteUnit(desired, &expected); len(errs) > 0 {
 				for _, err := range errs {
 					log.WithError(err).WithField("unit", desired.UnitName()).Warn("Unable to render expected unit file contents.")
 				}
-				continue
-			}
-			if !bytes.Equal(expected.Bytes(), actual.Content) {
+			} else if !bytes.Equal(expected.Bytes(), actual.Content) {
 				log.WithField("unitName", actual.UnitName()).Debug("Unit content differs.")
-				unitsToChange = append(unitsToChange, desired)
-				continue
+				willUpdate = true
+				shouldRestart = true
 			}
 
 			// Schedule the unit for restart if a volume-mounted file is due to be modified.
@@ -168,13 +121,23 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 						"unitName":        actual.UnitName(),
 						"mountedFilePath": hostPath,
 					}).Debug("Mounted volume file has been changed.")
-					unitsToRestart = append(unitsToRestart, desired)
+					shouldRestart = true
 					break
 				}
 			}
 
+			if willUpdate && desired.Container != nil {
+				updatedContainers = append(updatedContainers, UpdatedContainer(*desired.Container))
+			}
+
+			if shouldRestart {
+				unitsToRestart = append(unitsToRestart, desired)
+			}
+
 			// Otherwise: everything is fine, nothing to do.
-			log.WithField("unitName", actual.UnitName()).Debug("Nothing to do.")
+			if !willUpdate && !shouldRestart {
+				log.WithField("unitName", actual.UnitName()).Debug("Nothing to do.")
+			}
 		} else {
 			// Unit is no longer desired.
 			log.WithField("unitName", actual.UnitName()).Debug("Unit is no longer desired.")
