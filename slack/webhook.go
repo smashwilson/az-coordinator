@@ -43,16 +43,12 @@ func (payload *slackPayload) appendErrorBlock(err error) {
 func (payload *slackPayload) appendContainerBlock(container state.UpdatedContainer) {
 	status := strings.Builder{}
 	fmt.Fprintf(&status, ":octocat: <%s|*%s*> :", container.RepositoryURL(), container.Repository)
-	fmt.Fprintf(&status, " :commit: <%s|`%s`>", container.CommitURL(), container.GitOID)
+	fmt.Fprintf(&status, " :commit: <%s|`%s`>", container.CommitURL(), container.GitOID[0:7])
 	if container.GitRef != "master" {
-		fmt.Fprintf(&status, " :ref: <%s|`%s`>", container.BranchURL(), container.GitRef)
+		fmt.Fprintf(&status, " :branch: <%s|`%s`>", container.BranchURL(), container.GitRef)
 		fmt.Fprintf(&status, " <%s|:pull_request:>", container.PullRequestURL())
 	}
 	payload.appendMarkdownBlock(status.String())
-}
-
-func (payload *slackPayload) appendDivider() {
-	payload.Blocks = append(payload.Blocks, jo{"type": "divider"})
 }
 
 func (payload slackPayload) render() ([]byte, error) {
@@ -79,14 +75,12 @@ func generatePayload(d *state.Delta, errs []error) slackPayload {
 	}
 
 	if len(errs) > 0 {
-		payload.appendDivider()
 		for _, err := range errs {
 			payload.appendErrorBlock(err)
 		}
 	}
 
 	if len(updatedContainers) > 0 {
-		payload.appendDivider()
 		for _, container := range updatedContainers {
 			payload.appendContainerBlock(container)
 		}
