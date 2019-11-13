@@ -99,8 +99,8 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 					willUpdate = true
 					shouldRestart = true
 					log.WithFields(logrus.Fields{
-						"unitName": actual.UnitName(),
-						"actualID": actual.ImageID,
+						"unitName":  actual.UnitName(),
+						"actualID":  actual.ImageID,
 						"desiredID": desired.Container.ImageID,
 					}).Debug("Container image ID differs.")
 				}

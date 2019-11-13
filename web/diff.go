@@ -47,7 +47,7 @@ func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if errs := actual.ReadImages(session, *desired); len(errs) > 0 {
-		for _, err := range(errs) {
+		for _, err := range errs {
 			session.Log.WithError(err).Warn("Unable to read actual image.")
 		}
 		w.WriteHeader(http.StatusInternalServerError)
