@@ -132,10 +132,9 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 			}
 
 			if willUpdate && desired.Container != nil {
+				unitsToChange = append(unitsToChange, desired)
 				updatedContainers = append(updatedContainers, UpdatedContainer(*desired.Container))
-			}
-
-			if shouldRestart {
+			} else if shouldRestart {
 				unitsToRestart = append(unitsToRestart, desired)
 			}
 
