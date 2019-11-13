@@ -27,6 +27,14 @@ func diff() {
 		log.WithError(err).Fatal("Unable to read actual state.")
 	}
 
+	errs := actual.ReadImages(r.session, *desired)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			log.WithError(err).Error("Docker error.")
+		}
+		log.Fatal("Unable to read actual Docker images.")
+	}
+
 	log.Info("Computing delta.")
 	delta := r.session.Between(desired, actual)
 

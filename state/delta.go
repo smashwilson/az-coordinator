@@ -2,16 +2,37 @@ package state
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
 )
+
+// UpdatedContainer captures information about a container image that has been modified.
+type UpdatedContainer DesiredDockerContainer
+
+// RepositoryURL generates a URL to the GitHub repository that created this container.
+func (c UpdatedContainer) RepositoryURL() string {
+	return fmt.Sprintf("https://github.com/%s", c.Repository)
+}
+
+// CommitURL generates a permalink to the git commit on GitHub.
+func (c UpdatedContainer) CommitURL() string {
+	return fmt.Sprintf("https://github.com/%s/commit/%s", c.Repository, c.GitOID)
+}
+
+// BranchURL generates a link to the git branch on GitHub.
+func (c UpdatedContainer) BranchURL() string {
+	return fmt.Sprintf("https://github.com/%s/tree/%s", c.Repository, c.GitRef)
+}
+
+// PullRequestURL generates a link to the open pull request (if any).
+func (c UpdatedContainer) PullRequestURL() string {
+	return fmt.Sprintf("https://github.com/%s/pull/%s", c.Repository, c.GitRef)
+}
 
 // Delta is a JSON-serializable structure enumerating the changes necessary to bring the actual system state
 // in alignment with the desired state.
@@ -21,6 +42,8 @@ type Delta struct {
 	UnitsToRestart []DesiredSystemdUnit `json:"units_to_restart"`
 	UnitsToRemove  []ActualSystemdUnit  `json:"units_to_remove"`
 	FilesToWrite   []string             `json:"files_to_write"`
+
+	UpdatedContainers []UpdatedContainer `json:"-"`
 
 	fileContent map[string][]byte
 	session     *Session
@@ -37,6 +60,8 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 		unitsToRestart = make([]DesiredSystemdUnit, 0)
 		unitsToRemove  = make([]ActualSystemdUnit, 0)
 		filesToWrite   = make([]string, 0, len(desired.Files))
+
+		updatedContainers = make([]UpdatedContainer, 0)
 
 		fileContentByPath = make(map[string][]byte, len(desired.Files))
 		desiredByName     = make(map[string]DesiredSystemdUnit)
@@ -65,54 +90,32 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 			log.WithField("unitName", actual.UnitName()).Debug("Verifying systemd unit.")
 			desiredRemaining[desired.UnitName()] = false
 
-			// Determine if the actual unit needs to be reloaded to match the desired one.
+			willUpdate := false
+			shouldRestart := false
 
-			// Check unit file content first.
+			// Determine if the ID of the running Docker container image will change.
+			if desired.Container != nil {
+				if desired.Container.ImageID != actual.ImageID && len(desired.Container.ImageID) > 0 {
+					willUpdate = true
+					shouldRestart = true
+					log.WithFields(logrus.Fields{
+						"unitName":  actual.UnitName(),
+						"actualID":  actual.ImageID,
+						"desiredID": desired.Container.ImageID,
+					}).Debug("Container image ID differs.")
+				}
+			}
+
+			// Determine if the actual unit needs to be reloaded to match the desired one.
 			var expected bytes.Buffer
 			if errs := session.WriteUnit(desired, &expected); len(errs) > 0 {
 				for _, err := range errs {
 					log.WithError(err).WithField("unit", desired.UnitName()).Warn("Unable to render expected unit file contents.")
 				}
-				continue
-			}
-			if !bytes.Equal(expected.Bytes(), actual.Content) {
+			} else if !bytes.Equal(expected.Bytes(), actual.Content) {
 				log.WithField("unitName", actual.UnitName()).Debug("Unit content differs.")
-				unitsToChange = append(unitsToChange, desired)
-				continue
-			}
-
-			if desired.Container == nil || desired.Container.Name == "" {
-				// If the desired unit doesn't specify a container name, then the running container will have an automatically
-				// assigned one. Usually this means it's a one-shot.
-				continue
-			}
-
-			// Check the image ID associated with a running container next.
-			container, err := session.cli.ContainerInspect(context.Background(), desired.Container.Name)
-			if err != nil {
-				if client.IsErrNotFound(err) {
-					// It's not running. Definitely restart the thing.
-					log.WithFields(logrus.Fields{
-						"unitName":      actual.UnitName(),
-						"containerName": desired.Container.Name,
-					}).Debug("Container is not running.")
-					unitsToRestart = append(unitsToRestart, desired)
-					continue
-				}
-				log.WithError(err).WithField("containerName", desired.Container.Name).Warn("Unable to inspect container.")
-				continue
-			}
-
-			if container.Image != desired.Container.ImageID {
-				// A newer image has been pulled. Restart the unit to pick it up.
-				log.WithFields(logrus.Fields{
-					"unitName":       actual.UnitName(),
-					"containerName":  desired.Container.Name,
-					"desiredImageID": desired.Container.ImageID,
-					"actualImageID":  container.Image,
-				}).Debug("Container image is out of date.")
-				unitsToRestart = append(unitsToRestart, desired)
-				continue
+				willUpdate = true
+				shouldRestart = true
 			}
 
 			// Schedule the unit for restart if a volume-mounted file is due to be modified.
@@ -123,13 +126,22 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 						"unitName":        actual.UnitName(),
 						"mountedFilePath": hostPath,
 					}).Debug("Mounted volume file has been changed.")
-					unitsToRestart = append(unitsToRestart, desired)
+					shouldRestart = true
 					break
 				}
 			}
 
+			if willUpdate && desired.Container != nil {
+				unitsToChange = append(unitsToChange, desired)
+				updatedContainers = append(updatedContainers, UpdatedContainer(*desired.Container))
+			} else if shouldRestart {
+				unitsToRestart = append(unitsToRestart, desired)
+			}
+
 			// Otherwise: everything is fine, nothing to do.
-			log.WithField("unitName", actual.UnitName()).Debug("Nothing to do.")
+			if !willUpdate && !shouldRestart {
+				log.WithField("unitName", actual.UnitName()).Debug("Nothing to do.")
+			}
 		} else {
 			// Unit is no longer desired.
 			log.WithField("unitName", actual.UnitName()).Debug("Unit is no longer desired.")
@@ -148,13 +160,14 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 	}
 
 	return Delta{
-		UnitsToAdd:     unitsToAdd,
-		UnitsToChange:  unitsToChange,
-		UnitsToRestart: unitsToRestart,
-		UnitsToRemove:  unitsToRemove,
-		FilesToWrite:   filesToWrite,
-		fileContent:    fileContentByPath,
-		session:        session,
+		UnitsToAdd:        unitsToAdd,
+		UnitsToChange:     unitsToChange,
+		UnitsToRestart:    unitsToRestart,
+		UnitsToRemove:     unitsToRemove,
+		FilesToWrite:      filesToWrite,
+		UpdatedContainers: updatedContainers,
+		fileContent:       fileContentByPath,
+		session:           session,
 	}
 }
 
@@ -174,7 +187,7 @@ func (d Delta) Apply(uid, gid int) []error {
 	var (
 		errs         = make([]error, 0)
 		session      = d.session
-		log = session.Log
+		log          = session.Log
 		needsReload  = false
 		restartUnits = make([]string, 0, len(d.UnitsToChange)+len(d.UnitsToRestart))
 	)
