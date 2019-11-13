@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/coreos/go-systemd/dbus"
@@ -236,6 +238,32 @@ type SyncSettings struct {
 	GID int
 }
 
+var dfPercentRx = regexp.MustCompile(`(\d+)%`)
+
+// ReadDiskUsage reads the current usage level of the disk partition that stores Docker images and returns it as a
+// percentage.
+func (s Session) ReadDiskUsage() (int, error) {
+	out, err := exec.Command("df", "/var/lib/docker").Output()
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			s.Log.WithField("exitCode", exitError.ExitCode()).Warnf("df command exited abnormally:\n%s\n", exitError.Stderr)
+		}
+		return 0, err
+	}
+	s.Log.Debugf("df /var/lib/docker:\n%s\n", out)
+
+	matches := dfPercentRx.FindAllSubmatch(out, 2)
+	if matches == nil {
+		return 0, fmt.Errorf("Unable to parse partition use percentage from df output: %s", out)
+	}
+	if len(matches) > 1 {
+		return 0, fmt.Errorf("Found multiple percentages in df output: %s", out)
+	}
+	match := matches[0][1]
+	i64, err := strconv.ParseInt(string(match), 10, 32)
+	return int(i64), err
+}
+
 // Synchronize brings local Docker images up to date, then reads desired and actual state, computes a
 // Delta between them, and applies it. The applied Delta is returned.
 func (s *Session) Synchronize(settings SyncSettings) (*Delta, []error) {
@@ -282,8 +310,15 @@ func (s *Session) Synchronize(settings SyncSettings) (*Delta, []error) {
 		return nil, append(errs, errors.New("unable to apply delta"))
 	}
 
-	s.Log.Info("Pruning unused docker data.")
-	s.Prune()
+	usage, err := s.ReadDiskUsage()
+	if err != nil {
+		s.Log.WithError(err).Warn("Unable to read disk usage")
+	} else if usage >= 70 {
+		s.Log.Info("Pruning unused docker data.")
+		s.Prune()
+	} else {
+		s.Log.WithField("usage", usage).Info("No prune necessary yet.")
+	}
 
 	return &delta, nil
 }
