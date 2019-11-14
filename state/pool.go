@@ -14,7 +14,7 @@ type SessionLease struct {
 
 	pool    *Pool
 	secrets *secrets.Bag
-	log     *logrus.Logger
+	Log     *logrus.Logger
 }
 
 // Lease creates a stand-alone session that is separate from any Pool. It will be closed when released.
@@ -23,7 +23,7 @@ func (session *Session) Lease() *SessionLease {
 		Session: session,
 		pool:    nil,
 		secrets: nil,
-		log:     logrus.StandardLogger(),
+		Log:     logrus.StandardLogger(),
 	}
 }
 
@@ -118,7 +118,7 @@ func (pool *Pool) Return(session *Session) {
 // WithLogger uses a non-standard logger for any log messages emitted through this session for the duration of its
 // current lease.
 func (lease *SessionLease) WithLogger(logger *logrus.Logger) *SessionLease {
-	lease.log = logger
+	lease.Log = logger
 	return lease
 }
 

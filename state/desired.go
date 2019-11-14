@@ -106,7 +106,7 @@ type DesiredSystemdUnit struct {
 func (session SessionLease) readDesiredUnits(whereClause string, queryArgs ...interface{}) ([]DesiredSystemdUnit, error) {
 	var (
 		db  = session.db
-		log = session.log
+		log = session.Log
 	)
 
 	unitRows, err := db.Query(`
@@ -262,7 +262,7 @@ func (session Session) UndesireUnit(id int) error {
 
 // MakeDesired persists its caller within the database. Future calls to ReadDesiredState will include this unit
 // in its output.
-func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
+func (unit DesiredSystemdUnit) MakeDesired(session SessionLease) error {
 	if unit.ID != nil {
 		return fmt.Errorf("Attempt to re-persist already persisted unit: %d", unit.ID)
 	}
@@ -320,7 +320,7 @@ func (unit DesiredSystemdUnit) MakeDesired(session Session) error {
 }
 
 // Update modifies an existing unit in the database to match its in-memory representation.
-func (unit DesiredSystemdUnit) Update(session Session) error {
+func (unit DesiredSystemdUnit) Update(session SessionLease) error {
 	if unit.ID == nil {
 		return errors.New("Attempt to update an un-persisted desired unit")
 	}

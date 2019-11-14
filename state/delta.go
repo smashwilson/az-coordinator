@@ -52,7 +52,7 @@ type Delta struct {
 // state to the desired state.
 func (session *SessionLease) Between(desired *DesiredState, actual *ActualState) Delta {
 	var (
-		log = session.log
+		log = session.Log
 
 		unitsToAdd     = make([]DesiredSystemdUnit, 0)
 		unitsToChange  = make([]DesiredSystemdUnit, 0)
@@ -173,7 +173,7 @@ func (session *SessionLease) Between(desired *DesiredState, actual *ActualState)
 func (d Delta) CoordinatorRestartNeeded(session *SessionLease) bool {
 	bag, err := session.GetSecrets()
 	if err != nil {
-		session.log.WithError(err).Warn("Unable to load secrets.")
+		session.Log.WithError(err).Warn("Unable to load secrets.")
 		return false
 	}
 
@@ -190,7 +190,7 @@ func (d Delta) CoordinatorRestartNeeded(session *SessionLease) bool {
 func (d Delta) Apply(session *SessionLease, uid, gid int) []error {
 	var (
 		errs         = make([]error, 0)
-		log          = session.log
+		log          = session.Log
 		needsReload  = false
 		restartUnits = make([]string, 0, len(d.UnitsToChange)+len(d.UnitsToRestart))
 	)

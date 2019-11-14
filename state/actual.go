@@ -36,7 +36,7 @@ type ActualSystemdUnit struct {
 func (session SessionLease) ReadActualState() (*ActualState, error) {
 	var (
 		conn = session.conn
-		log  = session.log
+		log  = session.Log
 	)
 
 	bag, err := session.GetSecrets()

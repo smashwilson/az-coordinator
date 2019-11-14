@@ -22,11 +22,11 @@ func (s SessionLease) PullAllImages(state DesiredState) []error {
 		if unit.Container != nil && len(unit.Container.ImageName) > 0 && len(unit.Container.ImageTag) > 0 {
 			ref := unit.Container.ImageName + ":" + unit.Container.ImageTag
 			imageRefs[ref] = true
-			s.log.WithField("ref", ref).Debug("Scheduling docker pull.")
+			s.Log.WithField("ref", ref).Debug("Scheduling docker pull.")
 		}
 	}
 
-	s.log.WithField("count", len(imageRefs)).Debug("Beginning docker pulls.")
+	s.Log.WithField("count", len(imageRefs)).Debug("Beginning docker pulls.")
 	results := make(chan error, len(imageRefs))
 	for ref := range imageRefs {
 		go s.pullImage(ref, results)
@@ -37,7 +37,7 @@ func (s SessionLease) PullAllImages(state DesiredState) []error {
 			errs = append(errs, err)
 		}
 	}
-	s.log.WithField("count", len(imageRefs)).Debug("Docker pulls complete.")
+	s.Log.WithField("count", len(imageRefs)).Debug("Docker pulls complete.")
 
 	return errs
 }
@@ -62,11 +62,11 @@ func (s SessionLease) pullImage(ref string, done chan<- error) {
 	}
 
 	if rxUpToDate.Match(payload) {
-		s.log.WithField("ref", ref).Debug("Container image already current.")
+		s.Log.WithField("ref", ref).Debug("Container image already current.")
 	} else if rxDownloadedNewer.Match(payload) {
-		s.log.WithField("ref", ref).Info("Container image updated.")
+		s.Log.WithField("ref", ref).Info("Container image updated.")
 	} else {
-		s.log.WithField("ref", ref).Warningf("Unrecognized ImagePull payload:\n%s\n---\n", payload)
+		s.Log.WithField("ref", ref).Warningf("Unrecognized ImagePull payload:\n%s\n---\n", payload)
 	}
 
 	done <- nil
@@ -82,7 +82,7 @@ func (s SessionLease) CreateNetwork() error {
 	for _, network := range networks {
 		if network.Name == "local" {
 			// Network already exists
-			s.log.WithFields(logrus.Fields{
+			s.Log.WithFields(logrus.Fields{
 				"networkID":     network.ID,
 				"networkName":   network.Name,
 				"networkDriver": network.Driver,
@@ -103,7 +103,7 @@ func (s SessionLease) CreateNetwork() error {
 		return err
 	}
 
-	s.log.WithField("networkID", response.ID).Debug("Network created.")
+	s.Log.WithField("networkID", response.ID).Debug("Network created.")
 	return nil
 }
 
@@ -111,9 +111,9 @@ func (s SessionLease) CreateNetwork() error {
 func (s SessionLease) Prune() {
 	cr, err := s.cli.ContainersPrune(context.Background(), filters.NewArgs())
 	if err != nil {
-		s.log.WithError(err).Warning("Unable to prune containers.")
+		s.Log.WithError(err).Warning("Unable to prune containers.")
 	} else {
-		s.log.WithFields(logrus.Fields{
+		s.Log.WithFields(logrus.Fields{
 			"containers":     len(cr.ContainersDeleted),
 			"spaceReclained": cr.SpaceReclaimed,
 		}).Debug("Containers removed.")
@@ -121,9 +121,9 @@ func (s SessionLease) Prune() {
 
 	ir, err := s.cli.ImagesPrune(context.Background(), filters.NewArgs())
 	if err != nil {
-		s.log.WithError(err).Warning("Unable to prune images.")
+		s.Log.WithError(err).Warning("Unable to prune images.")
 	} else {
-		s.log.WithFields(logrus.Fields{
+		s.Log.WithFields(logrus.Fields{
 			"images":         len(ir.ImagesDeleted),
 			"spaceReclaimed": cr.SpaceReclaimed,
 		}).Debug("Images removed.")

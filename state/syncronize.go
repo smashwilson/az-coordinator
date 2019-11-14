@@ -22,11 +22,11 @@ func (s SessionLease) ReadDiskUsage() (int, error) {
 	out, err := exec.Command("df", "/var/lib/docker").Output()
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
-			s.log.WithField("exitCode", exitError.ExitCode()).Warnf("df command exited abnormally:\n%s\n", exitError.Stderr)
+			s.Log.WithField("exitCode", exitError.ExitCode()).Warnf("df command exited abnormally:\n%s\n", exitError.Stderr)
 		}
 		return 0, err
 	}
-	s.log.Debugf("df /var/lib/docker:\n%s\n", out)
+	s.Log.Debugf("df /var/lib/docker:\n%s\n", out)
 
 	matches := dfPercentRx.FindAllSubmatch(out, 2)
 	if matches == nil {
@@ -52,34 +52,34 @@ func (s *SessionLease) Synchronize(settings SyncSettings) (*Delta, []error) {
 		gid = settings.GID
 	}
 
-	s.log.Info("Reading desired state.")
+	s.Log.Info("Reading desired state.")
 	desired, err := s.ReadDesiredState()
 	if err != nil {
 		return nil, []error{err}
 	}
 
-	s.log.Info("Reading actual state.")
+	s.Log.Info("Reading actual state.")
 	actual, err := s.ReadActualState()
 	if err != nil {
 		return nil, []error{err, errors.New("unable to read system state")}
 	}
 
-	s.log.Info("Reading original docker images.")
+	s.Log.Info("Reading original docker images.")
 	if errs := actual.ReadImages(s, *desired); len(errs) > 0 {
 		return nil, append(errs, errors.New("unable to read original images"))
 	}
 
-	s.log.Info("Pulling referenced images.")
+	s.Log.Info("Pulling referenced images.")
 	if errs := s.PullAllImages(*desired); len(errs) > 0 {
 		return nil, append(errs, errors.New("pull errors"))
 	}
 
-	s.log.Info("Reading updated docker images.")
+	s.Log.Info("Reading updated docker images.")
 	if err = desired.ReadImages(s); err != nil {
 		return nil, []error{err, errors.New("unable to pull docker images")}
 	}
 
-	s.log.Info("Computing delta.")
+	s.Log.Info("Computing delta.")
 	delta := s.Between(desired, actual)
 
 	if errs := delta.Apply(s, uid, gid); len(errs) > 0 {
@@ -88,12 +88,12 @@ func (s *SessionLease) Synchronize(settings SyncSettings) (*Delta, []error) {
 
 	usage, err := s.ReadDiskUsage()
 	if err != nil {
-		s.log.WithError(err).Warn("Unable to read disk usage")
+		s.Log.WithError(err).Warn("Unable to read disk usage")
 	} else if usage >= 70 {
-		s.log.Info("Pruning unused docker data.")
+		s.Log.Info("Pruning unused docker data.")
 		s.Prune()
 	} else {
-		s.log.WithField("usage", usage).Info("No prune necessary yet.")
+		s.Log.WithField("usage", usage).Info("No prune necessary yet.")
 	}
 
 	return &delta, nil
