@@ -68,7 +68,7 @@ func (pool *Pool) Take() (*SessionLease, error) {
 	for _, entry := range pool.available {
 		if !entry.used {
 			entry.used = true
-			return &SessionLease{Session: entry.session, pool: pool}, nil
+			return &SessionLease{Session: entry.session, pool: pool, Log: logrus.StandardLogger()}, nil
 		}
 	}
 
@@ -79,7 +79,7 @@ func (pool *Pool) Take() (*SessionLease, error) {
 	}
 
 	pool.available = append(pool.available, &poolEntry{session: overage, used: true})
-	return &SessionLease{Session: overage, pool: pool}, nil
+	return &SessionLease{Session: overage, pool: pool, Log: logrus.StandardLogger()}, nil
 }
 
 // Return returns a session borrowed from the pool with Take.
