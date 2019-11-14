@@ -41,14 +41,14 @@ func (s Server) handleDesired(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) handleListDesired(w http.ResponseWriter, r *http.Request) {
-	session, err := s.newSession()
+	session, err := s.pool.Take()
 	if err != nil {
 		log.WithError(err).Error("Unable to establish a session.")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to establish a session"))
 		return
 	}
-	defer session.Close()
+	defer session.Release()
 
 	desired, err := session.ReadDesiredState()
 	if err != nil {
@@ -84,14 +84,14 @@ func (s Server) handleCreateDesired(w http.ResponseWriter, r *http.Request) {
 		Schedule  string                  `json:"calendar"`
 	}
 
-	session, err := s.newSession()
+	session, err := s.pool.Take()
 	if err != nil {
 		log.WithError(err).Error("Unable to establish a session.")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to establish a session"))
 		return
 	}
-	defer session.Close()
+	defer session.Release()
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
@@ -170,14 +170,14 @@ func (s Server) handleUpdateDesired(w http.ResponseWriter, r *http.Request, id i
 		Schedule  string                 `json:"calendar,omitempty"`
 	}
 
-	session, err := s.newSession()
+	session, err := s.pool.Take()
 	if err != nil {
 		log.WithError(err).Error("Unable to establish a session.")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to establish a session"))
 		return
 	}
-	defer session.Close()
+	defer session.Release()
 
 	unit, err := session.ReadDesiredUnit(id)
 	if err != nil {
@@ -253,14 +253,14 @@ func (s Server) handleUpdateDesired(w http.ResponseWriter, r *http.Request, id i
 }
 
 func (s Server) handleDeleteDesired(w http.ResponseWriter, r *http.Request, id int) {
-	session, err := s.newSession()
+	session, err := s.pool.Take()
 	if err != nil {
 		log.WithError(err).Error("Unable to establish a session.")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to establish a session"))
 		return
 	}
-	defer session.Close()
+	defer session.Release()
 
 	if err := session.UndesireUnit(id); err != nil {
 		log.WithError(err).Error("Unable to delete unit.")

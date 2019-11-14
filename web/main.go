@@ -18,18 +18,25 @@ type Server struct {
 	opts *config.Options
 	db   *sql.DB
 	ring *secrets.DecoderRing
+	pool *state.Pool
 
 	currentSync *syncProgress
 }
 
 // NewServer creates (but does not start) an HTTP server for the coordinator management interface.
-func NewServer(opts *config.Options, db *sql.DB, ring *secrets.DecoderRing) Server {
+func NewServer(opts *config.Options, db *sql.DB, ring *secrets.DecoderRing) (*Server, error) {
 	s := Server{
 		opts:        opts,
 		db:          db,
 		ring:        ring,
 		currentSync: &syncProgress{},
 	}
+
+	pool, err := state.NewPool(s.newSession, 10)
+	if err != nil {
+		return nil, err
+	}
+	s.pool = pool
 
 	http.HandleFunc("/", s.wrap(s.handleRoot, false))
 	http.HandleFunc("/secrets", s.wrap(s.handleSecretsRoot, true))
@@ -39,7 +46,7 @@ func NewServer(opts *config.Options, db *sql.DB, ring *secrets.DecoderRing) Serv
 	http.HandleFunc("/diff", s.wrap(s.handleDiffRoot, true))
 	http.HandleFunc("/sync", s.wrap(s.handleSyncRoot, true))
 
-	return s
+	return &s, nil
 }
 
 // Listen binds a socket to the address requested by the current Options. It only returns if there's an error.
@@ -118,11 +125,7 @@ func (s Server) methods(w http.ResponseWriter, r *http.Request, handlers methodH
 }
 
 func (s Server) newSession() (*state.Session, error) {
-	return s.newLoggedSession(log.StandardLogger())
-}
-
-func (s Server) newLoggedSession(logger *log.Logger) (*state.Session, error) {
-	return state.NewSession(s.db, s.ring, s.opts.DockerAPIVersion, logger)
+	return state.NewSession(s.db, s.ring, s.opts.DockerAPIVersion)
 }
 
 func extractID(rx *regexp.Regexp, w http.ResponseWriter, r *http.Request) (string, bool) {
