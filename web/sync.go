@@ -142,13 +142,14 @@ func (s *Server) performSync() {
 
 	s.opts.CloudwatchLogger(logger)
 
-	session, err := s.newLoggedSession(logger)
+	session, err := s.pool.Take()
 	if err != nil {
 		log.WithError(err).Error("Unable to establish session.")
 		s.currentSync.setErrors([]error{err})
 		return
 	}
-	defer session.Close()
+	defer session.Release()
+	session.WithLogger(logger)
 
 	delta, errs := session.Synchronize(state.SyncSettings{})
 	if len(s.opts.SlackWebhookURL) > 0 {

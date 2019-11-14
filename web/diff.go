@@ -14,14 +14,14 @@ func (s Server) handleDiffRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) handleGetDiff(w http.ResponseWriter, r *http.Request) {
-	session, err := s.newSession()
+	session, err := s.pool.Take()
 	if err != nil {
 		log.WithError(err).Error("Unable to establish a session.")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to establish a session."))
 		return
 	}
-	defer session.Close()
+	defer session.Release()
 
 	actual, err := session.ReadActualState()
 	if err != nil {

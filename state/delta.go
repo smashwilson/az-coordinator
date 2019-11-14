@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"github.com/smashwilson/az-coordinator/secrets"
 )
 
 // UpdatedContainer captures information about a container image that has been modified.
@@ -46,12 +47,11 @@ type Delta struct {
 	UpdatedContainers []UpdatedContainer `json:"-"`
 
 	fileContent map[string][]byte
-	session     *Session
 }
 
 // Between compares desired and actual system state and produces a Delta necessary to convert the observed actual
 // state to the desired state.
-func (session *Session) Between(desired *DesiredState, actual *ActualState) Delta {
+func (session *SessionLease) Between(desired *DesiredState, actual *ActualState) Delta {
 	var (
 		log = session.Log
 
@@ -167,14 +167,13 @@ func (session *Session) Between(desired *DesiredState, actual *ActualState) Delt
 		FilesToWrite:      filesToWrite,
 		UpdatedContainers: updatedContainers,
 		fileContent:       fileContentByPath,
-		session:           session,
 	}
 }
 
 // CoordinatorRestartNeeded returns true if this Delta will require the coordinator itself to restart.
 func (d Delta) CoordinatorRestartNeeded() bool {
 	for _, filePath := range d.FilesToWrite {
-		if d.session.secrets.IsTLSFile(filePath) {
+		if secrets.IsTLSFile(filePath) {
 			return true
 		}
 	}
@@ -183,10 +182,9 @@ func (d Delta) CoordinatorRestartNeeded() bool {
 
 // Apply enacts the changes described by a Delta on the system. Individual operations that fail append errors to
 // the returned error slice, but do not prevent subsequent operations from being attempted.
-func (d Delta) Apply(uid, gid int) []error {
+func (d Delta) Apply(session *SessionLease, uid, gid int) []error {
 	var (
 		errs         = make([]error, 0)
-		session      = d.session
 		log          = session.Log
 		needsReload  = false
 		restartUnits = make([]string, 0, len(d.UnitsToChange)+len(d.UnitsToRestart))
@@ -271,7 +269,7 @@ func (d Delta) Apply(uid, gid int) []error {
 			continue
 		}
 
-		errs = append(errs, d.session.WriteUnit(unit, f)...)
+		errs = append(errs, session.WriteUnit(unit, f)...)
 		f.Close()
 
 		log.WithFields(logrus.Fields{
@@ -440,10 +438,6 @@ func (d Delta) String() string {
 
 	for _, f := range d.FilesToWrite {
 		fmt.Fprintf(&b, "write file: %s contentlen=%d\n", f, len(d.fileContent[f]))
-	}
-
-	if d.CoordinatorRestartNeeded() {
-		fmt.Fprintf(&b, "coordinator restart needed\n")
 	}
 
 	return b.String()

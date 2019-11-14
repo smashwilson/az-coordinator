@@ -15,14 +15,14 @@ func (s Server) handleActualRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) handleListActual(w http.ResponseWriter, r *http.Request) {
-	session, err := s.newSession()
+	session, err := s.pool.Take()
 	if err != nil {
 		log.WithError(err).Error("Unable to establish a session.")
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "Unable to establish a session.\n")
 		return
 	}
-	defer session.Close()
+	defer session.Release()
 
 	actual, err := session.ReadActualState()
 	if err != nil {

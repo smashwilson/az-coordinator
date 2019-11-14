@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -90,7 +89,6 @@ func (o Options) CloudwatchLogger(logger *log.Logger) bool {
 		return false
 	}
 	logger.AddHook(hook)
-	log.SetOutput(ioutil.Discard)
 	log.SetFormatter(&logrus_cloudwatchlogs.DevFormatter{})
 	return true
 }

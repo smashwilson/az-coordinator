@@ -380,18 +380,19 @@ func initialize() {
 	}
 
 	log.Info("Establishing session.")
-	session, err := state.NewSession(r.db, ring, r.options.DockerAPIVersion, log.StandardLogger())
+	session, err := state.NewSession(r.db, ring, r.options.DockerAPIVersion)
 	if err != nil {
 		log.WithError(err).Fatal("Unable to create session.")
 	}
-	defer session.Close()
+	lease := session.Lease()
+	defer lease.Release()
 
 	log.Info("Creating Docker network.")
-	if err := session.CreateNetwork(); err != nil {
+	if err := lease.CreateNetwork(); err != nil {
 		log.WithError(err).Fatal("Unable to create Docker network.")
 	}
 
-	delta, errs := session.Synchronize(state.SyncSettings{UID: coordinatorUID, GID: azinfraGID})
+	delta, errs := lease.Synchronize(state.SyncSettings{UID: coordinatorUID, GID: azinfraGID})
 	if len(errs) > 0 {
 		for _, err := range errs {
 			log.WithError(err).Warn("Error encountered during synchronization.")

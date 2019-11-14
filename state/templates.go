@@ -120,16 +120,22 @@ func getTemplate(templateType UnitType) (*template.Template, error) {
 	return nil, fmt.Errorf("Invalid template type: %d", templateType)
 }
 
-func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSystemdUnit, []error) {
+func resolveDesiredUnit(unit DesiredSystemdUnit, session *SessionLease) (*resolvedSystemdUnit, []error) {
 	fullEnv := make(map[string]string, len(unit.Env)+len(unit.Secrets))
 	errs := make([]error, 0)
+
+	bag, err := session.GetSecrets()
+	if err != nil {
+		errs = append(errs, err)
+		return nil, errs
+	}
 
 	for k, v := range unit.Env {
 		fullEnv[k] = strings.ReplaceAll(v, "\n", "\\n\\\n")
 	}
 
 	for _, k := range unit.Secrets {
-		v, err := session.secrets.GetRequired(k)
+		v, err := bag.GetRequired(k)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -161,7 +167,7 @@ func resolveDesiredUnit(unit DesiredSystemdUnit, session *Session) (*resolvedSys
 
 // WriteUnit uses the template requested by a DesiredSystemdUnit to generate the expected contents of a
 // unit file.
-func (session *Session) WriteUnit(unit DesiredSystemdUnit, out io.Writer) []error {
+func (session *SessionLease) WriteUnit(unit DesiredSystemdUnit, out io.Writer) []error {
 	errs := make([]error, 0)
 
 	t, err := getTemplate(unit.Type)

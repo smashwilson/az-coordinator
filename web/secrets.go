@@ -17,14 +17,14 @@ func (s *Server) handleSecretsRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListSecrets(w http.ResponseWriter, r *http.Request) {
-	session, err := s.newSession()
+	session, err := s.pool.Take()
 	if err != nil {
 		log.WithError(err).Error("Unable to establish session.")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to establish session."))
 		return
 	}
-	defer session.Close()
+	defer session.Release()
 
 	keys := session.ListSecretKeys()
 	encoder := json.NewEncoder(w)
@@ -40,14 +40,14 @@ func (s *Server) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateSecrets(w http.ResponseWriter, r *http.Request) {
-	session, err := s.newSession()
+	session, err := s.pool.Take()
 	if err != nil {
 		log.WithError(err).Error("Unable to establish session.")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to establish session."))
 		return
 	}
-	defer session.Close()
+	defer session.Release()
 
 	toCreate := make(map[string]string)
 	decoder := json.NewDecoder(r.Body)
@@ -68,14 +68,14 @@ func (s *Server) handleCreateSecrets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteSecrets(w http.ResponseWriter, r *http.Request) {
-	session, err := s.newSession()
+	session, err := s.pool.Take()
 	if err != nil {
 		log.WithError(err).Error("Unable to establish session.")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to establish session."))
 		return
 	}
-	defer session.Close()
+	defer session.Release()
 
 	toDelete := make([]string, 0, 10)
 	decoder := json.NewDecoder(r.Body)

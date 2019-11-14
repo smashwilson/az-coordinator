@@ -23,7 +23,7 @@ type results struct {
 	options *config.Options
 	db      *sql.DB
 	ring    *secrets.DecoderRing
-	session *state.Session
+	session *state.SessionLease
 }
 
 func prepare(n needs) results {
@@ -57,7 +57,8 @@ func prepare(n needs) results {
 
 	if n.session {
 		log.Info("Establishing session.")
-		r.session, err = state.NewSession(r.db, r.ring, r.options.DockerAPIVersion, log.StandardLogger())
+		session, err := state.NewSession(r.db, r.ring, r.options.DockerAPIVersion)
+		r.session = session.Lease()
 		if err != nil {
 			log.WithError(err).Fatal("Unable to create session.")
 		}
