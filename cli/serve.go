@@ -25,9 +25,12 @@ func serve() {
 	} else {
 		log.WithField("delta", delta).Debug("Delta applied.")
 	}
-	r.session.Close()
+	r.session.Release()
 
-	s := web.NewServer(r.options, r.db, r.ring)
+	s, err := web.NewServer(r.options, r.db, r.ring)
+	if err != nil {
+		log.WithError(err).Fatal("Unable to create server.")
+	}
 	if err := s.Listen(); err != nil {
 		log.WithError(err).Fatal("Unable to bind socket.")
 	}

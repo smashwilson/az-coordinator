@@ -12,7 +12,7 @@ import (
 
 func sync() {
 	r := prepare(needs{options: true, session: true})
-	defer r.session.Close()
+	defer r.session.Release()
 	delta, errs := r.session.Synchronize(state.SyncSettings{})
 	if len(errs) > 0 {
 		for _, err := range errs {
