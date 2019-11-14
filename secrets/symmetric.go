@@ -16,11 +16,11 @@ import (
 // symmetric encryption backed by KMS-managed shared secrets.
 type DecoderRing struct {
 	kmsService  *kms.KMS
-	masterKeyId string
+	masterKeyID string
 }
 
 // NewDecoderRing connects to external AWS services.
-func NewDecoderRing(masterKeyId, awsRegion string) (*DecoderRing, error) {
+func NewDecoderRing(masterKeyID, awsRegion string) (*DecoderRing, error) {
 	session, err := session.NewSession(&aws.Config{
 		Region: &awsRegion,
 	})
@@ -29,14 +29,14 @@ func NewDecoderRing(masterKeyId, awsRegion string) (*DecoderRing, error) {
 	}
 
 	kmsService := kms.New(session)
-	return &DecoderRing{kmsService: kmsService, masterKeyId: masterKeyId}, nil
+	return &DecoderRing{kmsService: kmsService, masterKeyID: masterKeyID}, nil
 }
 
 // Encrypt uses this DecoderRing's master key to generate a one-time encryption key, encrypt the requested
 // payload with it, and return ciphertext containing the encrypted key and payload.
 func (ring DecoderRing) Encrypt(plaintext string) ([]byte, error) {
 	dataKeyResult, err := ring.kmsService.GenerateDataKey(&kms.GenerateDataKeyInput{
-		KeyId:   aws.String(ring.masterKeyId),
+		KeyId:   aws.String(ring.masterKeyID),
 		KeySpec: aws.String("AES_128"),
 	})
 	if err != nil {
