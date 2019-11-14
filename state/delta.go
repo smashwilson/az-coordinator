@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"github.com/smashwilson/az-coordinator/secrets"
 )
 
 // UpdatedContainer captures information about a container image that has been modified.
@@ -170,15 +171,9 @@ func (session *SessionLease) Between(desired *DesiredState, actual *ActualState)
 }
 
 // CoordinatorRestartNeeded returns true if this Delta will require the coordinator itself to restart.
-func (d Delta) CoordinatorRestartNeeded(session *SessionLease) bool {
-	bag, err := session.GetSecrets()
-	if err != nil {
-		session.Log.WithError(err).Warn("Unable to load secrets.")
-		return false
-	}
-
+func (d Delta) CoordinatorRestartNeeded() bool {
 	for _, filePath := range d.FilesToWrite {
-		if bag.IsTLSFile(filePath) {
+		if secrets.IsTLSFile(filePath) {
 			return true
 		}
 	}
@@ -403,7 +398,7 @@ func (d Delta) Apply(session *SessionLease, uid, gid int) []error {
 		log.Debug("No unit files to remove.")
 	}
 
-	if d.CoordinatorRestartNeeded(session) {
+	if d.CoordinatorRestartNeeded() {
 		log.Info("Restarting coordinator.")
 		os.Exit(0)
 	}

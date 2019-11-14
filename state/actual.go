@@ -8,6 +8,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+	"github.com/smashwilson/az-coordinator/secrets"
 )
 
 // ActualState represents a view of SystemD units and files presently on the host as of the time ReadActualState() is called.
@@ -39,11 +40,6 @@ func (session SessionLease) ReadActualState() (*ActualState, error) {
 		log  = session.Log
 	)
 
-	bag, err := session.GetSecrets()
-	if err != nil {
-		return nil, err
-	}
-
 	listedUnits, err := conn.ListUnitFilesByPatterns(nil, []string{"az*"})
 	if err != nil {
 		return nil, err
@@ -63,7 +59,7 @@ func (session SessionLease) ReadActualState() (*ActualState, error) {
 		})
 	}
 
-	files, err := bag.ActualTLSFiles()
+	files, err := secrets.ActualTLSFiles()
 	if err != nil {
 		return nil, err
 	}
