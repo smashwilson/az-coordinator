@@ -33,12 +33,16 @@ type ActualSystemdUnit struct {
 
 // ReadActualState introspects SystemD and the filesystem to construct an ActualState instance that captures a
 // snapshot of the aspects of the host state that we care about managing.
-func (session Session) ReadActualState() (*ActualState, error) {
+func (session SessionLease) ReadActualState() (*ActualState, error) {
 	var (
-		conn    = session.conn
-		secrets = session.secrets
-		log     = session.Log
+		conn = session.conn
+		log  = session.log
 	)
+
+	bag, err := session.GetSecrets()
+	if err != nil {
+		return nil, err
+	}
 
 	listedUnits, err := conn.ListUnitFilesByPatterns(nil, []string{"az*"})
 	if err != nil {
@@ -59,7 +63,7 @@ func (session Session) ReadActualState() (*ActualState, error) {
 		})
 	}
 
-	files, err := secrets.ActualTLSFiles()
+	files, err := bag.ActualTLSFiles()
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +72,7 @@ func (session Session) ReadActualState() (*ActualState, error) {
 }
 
 // ReadImages loads ImageIDs where possible by querying pre-pulled Docker images.
-func (state *ActualState) ReadImages(session *Session, desired DesiredState) []error {
+func (state *ActualState) ReadImages(session *SessionLease, desired DesiredState) []error {
 	var (
 		desiredByName = make(map[string]DesiredSystemdUnit)
 		errs          = make([]error, 0)

@@ -103,10 +103,10 @@ type DesiredSystemdUnit struct {
 	Schedule  string                  `json:"calendar,omitempty"`
 }
 
-func (session Session) readDesiredUnits(whereClause string, queryArgs ...interface{}) ([]DesiredSystemdUnit, error) {
+func (session SessionLease) readDesiredUnits(whereClause string, queryArgs ...interface{}) ([]DesiredSystemdUnit, error) {
 	var (
 		db  = session.db
-		log = session.Log
+		log = session.log
 	)
 
 	unitRows, err := db.Query(`
@@ -176,8 +176,11 @@ func (session Session) readDesiredUnits(whereClause string, queryArgs ...interfa
 
 // ReadDesiredState queries the database for the currently configured desired system state. DesiredDockerContainers
 // within the returned state will have no ImageID.
-func (session Session) ReadDesiredState() (*DesiredState, error) {
-	var secrets = session.secrets
+func (session SessionLease) ReadDesiredState() (*DesiredState, error) {
+	secrets, err := session.GetSecrets()
+	if err != nil {
+		return nil, err
+	}
 
 	units, err := session.readDesiredUnits("")
 	if err != nil {
@@ -194,7 +197,7 @@ func (session Session) ReadDesiredState() (*DesiredState, error) {
 
 // ReadDesiredUnit queries the database to load one specific desired systemd unit. It returns nil if no unit with the
 // requested id exists.
-func (session Session) ReadDesiredUnit(id int) (*DesiredSystemdUnit, error) {
+func (session SessionLease) ReadDesiredUnit(id int) (*DesiredSystemdUnit, error) {
 	units, err := session.readDesiredUnits("WHERE id = $1", id)
 	if err != nil {
 		return nil, err
@@ -209,7 +212,7 @@ func (session Session) ReadDesiredUnit(id int) (*DesiredSystemdUnit, error) {
 
 // ReadImages queries Docker for the most recently created container images corresponding to the image names and tags requested by
 // each DesiredSystemdUnit. This call populates the ImageID of each DesiredDockerContainer.
-func (state *DesiredState) ReadImages(session *Session) error {
+func (state *DesiredState) ReadImages(session *SessionLease) error {
 	for i := range state.Units {
 		unit := &state.Units[i]
 		if unit.Container == nil {
@@ -509,7 +512,7 @@ func (builder *DesiredSystemdUnitBuilder) Container(imageName string, imageTag s
 }
 
 // Secrets populates the secrets requested by this unit.
-func (builder *DesiredSystemdUnitBuilder) Secrets(keys []string, session Session) error {
+func (builder *DesiredSystemdUnitBuilder) Secrets(keys []string, session SessionLease) error {
 	if err := session.ValidateSecretKeys(keys); err != nil {
 		return err
 	}
