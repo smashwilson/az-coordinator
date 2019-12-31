@@ -90,8 +90,9 @@ func (s *SessionLease) Synchronize(settings SyncSettings) (*Delta, []error) {
 	if err != nil {
 		s.Log.WithError(err).Warn("Unable to read disk usage")
 	} else if usage >= 70 {
-		s.Log.Info("Pruning unused docker data.")
-		s.Prune()
+    s.Log.WithField("usage", usage).Warn("Disk is getting full: prune advised.")
+		// s.Log.Info("Pruning unused docker data.")
+		// s.Prune()
 	} else {
 		s.Log.WithField("usage", usage).Info("No prune necessary yet.")
 	}
