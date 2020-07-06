@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -297,6 +298,36 @@ func getGid(groupName string) int {
 	return int(gid64)
 }
 
+func moveFile(sourcePath, destPath string) error {
+	if err := os.Rename(sourcePath, destPath); err == nil {
+		// Rename worked.
+		return nil
+	}
+
+	// Fall back to a copy.
+	inputFile, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("Unable to open source file %s: %s", sourcePath, err)
+	}
+	defer inputFile.Close()
+
+	outputFile, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("Unable to create destination file %s: %s", destPath, err)
+	}
+	defer outputFile.Close()
+
+	if _, err := io.Copy(inputFile, outputFile); err != nil {
+		return fmt.Errorf("Unable to write to destination file %s: %s", destPath, err)
+	}
+
+	if err := os.Remove(sourcePath); err != nil {
+		return fmt.Errorf("Unable to remove source file %s: %s", sourcePath, err)
+	}
+
+	return nil
+}
+
 func initialize() {
 	var r = prepare(needs{options: true, db: true})
 
@@ -345,7 +376,7 @@ func initialize() {
 	log.Debug("Polkit permissions modified.")
 
 	if r.options.OptionsPath != config.DefaultOptionsPath {
-		if err := os.Rename(r.options.OptionsPath, config.DefaultOptionsPath); err != nil {
+		if err := moveFile(r.options.OptionsPath, config.DefaultOptionsPath); err != nil {
 			log.WithFields(log.Fields{
 				"err":                err,
 				"optionsPath":        r.options.OptionsPath,
