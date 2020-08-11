@@ -35,7 +35,7 @@ ExecStart=/usr/bin/docker run \
   --env {{ $key }}="{{ $value }}" \
 {{- end }}
 {{- range $hostPath, $containerPath := .U.Volumes }}
-  --volume {{ $hostPath }}:{{ $containerPath }}:ro \
+  --volume {{ $hostPath }}:{{ $containerPath }}:ro,z \
 {{- end }}
 {{- range $localPort, $externalPort := .U.Ports }}
   --publish {{ $localPort }}:{{ $externalPort }} \
@@ -65,7 +65,7 @@ ExecStart=/usr/bin/docker run --rm \
   --env {{ $key }}="{{ $value }}" \
 {{- end }}
 {{- range $hostPath, $containerPath := .U.Volumes }}
-  --volume {{ $hostPath }}:{{ $containerPath }}:ro \
+  --volume {{ $hostPath }}:{{ $containerPath }}:ro,z \
 {{- end }}
 {{- range $localPort, $externalPort := .U.Ports }}
   --publish {{ $localPort }}:{{ $externalPort }} \
