@@ -3,10 +3,10 @@ package state
 import (
 	"context"
 	"io/ioutil"
+	"os/exec"
 	"regexp"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/sirupsen/logrus"
 )
@@ -109,23 +109,12 @@ func (s SessionLease) CreateNetwork() error {
 
 // Prune removes stopped containers and unused container images to reclaim disk space.
 func (s SessionLease) Prune() {
-	cr, err := s.cli.ContainersPrune(context.Background(), filters.NewArgs())
+	out, err := exec.Command("docker", "system", "prune", "--all", "--force").Output()
 	if err != nil {
-		s.Log.WithError(err).Warning("Unable to prune containers.")
-	} else {
-		s.Log.WithFields(logrus.Fields{
-			"containers":     len(cr.ContainersDeleted),
-			"spaceReclained": cr.SpaceReclaimed,
-		}).Debug("Containers removed.")
+		if exitError, ok := err.(*exec.ExitError); ok {
+			s.Log.WithField("exitCode", exitError.ExitCode()).Warnf("docker prune command exited abnormally:\n%s\n", exitError.Stderr)
+		}
+		return
 	}
-
-	ir, err := s.cli.ImagesPrune(context.Background(), filters.NewArgs())
-	if err != nil {
-		s.Log.WithError(err).Warning("Unable to prune images.")
-	} else {
-		s.Log.WithFields(logrus.Fields{
-			"images":         len(ir.ImagesDeleted),
-			"spaceReclaimed": cr.SpaceReclaimed,
-		}).Debug("Images removed.")
-	}
+	s.Log.Debugf("docker system prune --all --force:\n%s\n", out)
 }

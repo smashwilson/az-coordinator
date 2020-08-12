@@ -45,6 +45,7 @@ func NewServer(opts *config.Options, db *sql.DB, ring *secrets.DecoderRing) (*Se
 	http.HandleFunc("/actual", s.wrap(s.handleActualRoot, true))
 	http.HandleFunc("/diff", s.wrap(s.handleDiffRoot, true))
 	http.HandleFunc("/sync", s.wrap(s.handleSyncRoot, true))
+	http.HandleFunc("/health", s.wrap(s.handleHealthRoot, true))
 
 	return &s, nil
 }
