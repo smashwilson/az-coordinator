@@ -435,7 +435,7 @@ func (builder *DesiredSystemdUnitBuilder) validate() error {
 			return errors.New("Invalid missing container")
 		}
 
-		if !strings.HasPrefix(builder.unit.Container.ImageName, "quay.io/smashwilson/az-") {
+		if !strings.HasPrefix(builder.unit.Container.ImageName, "quay.io/smashwilson/az-") && !strings.HasPrefix(builder.unit.Container.ImageName, "smashwilson/az-") {
 			logrus.WithField("imageName", builder.unit.Container.ImageName).Warn("Attempt to create desired unit with invalid container image.")
 			return errors.New("invalid container image name")
 		}
@@ -495,7 +495,7 @@ func (builder *DesiredSystemdUnitBuilder) Type(tp UnitType) error {
 }
 
 // Container validates and populates information about the container used by this service. The container's image must
-// begin with `quay.io/smashwilson/az-`. If the type has already been set, it is used to validate whether or not
+// begin with `smashwilson/az-`. If the type has already been set, it is used to validate whether or not
 // a container is expected to be set or not.
 func (builder *DesiredSystemdUnitBuilder) Container(imageName string, imageTag string, name string) error {
 	if len(imageName) == 0 && len(imageTag) == 0 {
