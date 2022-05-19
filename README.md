@@ -26,7 +26,7 @@ So, this repository builds a single Go binary that can be dropped on a freshly p
 
 ### What it doesn't do
 
-* Work with any containers that aren't in my [quay.io](https://quay.io) account or unit files that aren't named `az-...`.
+* Work with any containers that aren't in my [DockerHub](https://hub.docker.com/) account or unit files that aren't named `az-...`.
 * Manage inter-service dependencies.
 * Provide zero-downtime rollovers or horizontal scaling.
 
